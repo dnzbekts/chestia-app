@@ -3,11 +3,13 @@ from langgraph.graph import StateGraph, START, END
 from agents.recipe_agent import RecipeAgent
 from agents.review_agent import ReviewAgent
 from database import get_db_connection, find_recipe_by_ingredients
+from utils import i18n
 
 class GraphState(TypedDict):
     ingredients: List[str]              # Filtered, non-default ingredients
     original_ingredients: List[str]     # User's original input (for reference)
     difficulty: str                     # 'easy', 'intermediate', or 'hard'
+    lang: str                           # 'en' or 'tr'
     recipe: Optional[Dict[str, Any]]    # Generated recipe
     extra_ingredients: List[str]        # Track what extras were added
     extra_count: int                    # How many extras added (max 2)
@@ -52,12 +54,13 @@ def generate_recipe_node(state: GraphState):
 def review_recipe_node(state: GraphState):
     """
     Validate recipe and handle auto-retry with extra ingredients.
-    
+        
     Logic:
     1. If valid -> proceed to END
     2. If invalid and has suggestions and extra_count < 2 and iteration < 3:
        -> Add suggested extras and retry
     3. Otherwise -> Return error
+    
     """
     if state.get("error") or not state.get("recipe"):
         return state
@@ -76,11 +79,12 @@ def review_recipe_node(state: GraphState):
     # Recipe is invalid - check if we can retry
     current_iteration = state.get("iteration_count", 0)
     current_extra_count = state.get("extra_count", 0)
+    lang = state.get("lang", "en")
     
     # Check limits
     if current_iteration >= 3:
         return {
-            "error": "No suitable recipe could be found with the ingredients you provided. Please try again with different ingredients.",
+            "error": i18n.get_message(i18n.RECIPE_NOT_FOUND, lang),
             "recipe": None
         }
     
@@ -110,7 +114,7 @@ def review_recipe_node(state: GraphState):
     
     # All retries exhausted
     return {
-        "error": "No suitable recipe could be found with the ingredients you provided. Please try again with different ingredients.",
+        "error": i18n.get_message(i18n.RECIPE_NOT_FOUND, lang),
         "recipe": None
     }
 

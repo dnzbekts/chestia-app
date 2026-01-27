@@ -6,6 +6,7 @@ import re
 from graph import create_graph
 from database import get_db_connection, init_db, log_error
 from config import filter_default_ingredients
+from utils import i18n
 
 app = FastAPI(title="Chestia Backend")
 
@@ -18,10 +19,11 @@ class GenerateRequest(BaseModel):
         ...,
         description="Recipe difficulty level: easy, intermediate, or hard"
     )
+    lang: Literal["tr", "en"] = Field("en", description="Preferred language for messages: tr or en")
 
     @validator('ingredients', each_item=True)
     def validate_ingredient_chars(cls, v):
-        if not re.match(r"^[a-zA-Z0-9\s,-]+$", v):
+        if not re.match(r"^[a-zA-Z0-9\s,\-çÇğĞıİöÖşŞüÜ]+$", v):
             raise ValueError("Ingredient contains invalid characters")
         if len(v) > 50:
             raise ValueError("Ingredient name too long")
@@ -30,10 +32,21 @@ class GenerateRequest(BaseModel):
 
 class ModifyRequest(BaseModel):
     """Request to modify/regenerate a recipe"""
-    original_ingredients: List[str] = Field(..., min_length=1)
-    new_ingredients: Optional[List[str]] = None  # Additional ingredients to add
+    original_ingredients: List[str] = Field(..., min_length=3, max_length=20)
+    new_ingredients: Optional[List[str]] = Field(None, max_length=20)
     difficulty: Literal["easy", "intermediate", "hard"]
     modification_note: Optional[str] = None  # e.g., "make it spicier"
+    lang: Literal["tr", "en"] = Field("en", description="Preferred language for messages")
+    
+    @validator('original_ingredients', 'new_ingredients', each_item=True)
+    def validate_ingredient_chars(cls, v):
+        if v is None:
+            return v
+        if not re.match(r"^[a-zA-Z0-9\s,\-çÇğĞıİöÖşŞüÜ]+$", v):
+            raise ValueError("Ingredient contains invalid characters")
+        if len(v) > 50:
+            raise ValueError("Ingredient name too long")
+        return v
 
 
 class FeedbackRequest(BaseModel):
@@ -41,6 +54,7 @@ class FeedbackRequest(BaseModel):
     difficulty: str
     approved: bool
     recipe: Dict[str, Any]
+    lang: Literal["tr", "en"] = Field("en")
 
 
 @app.post("/generate")
@@ -63,7 +77,7 @@ def generate_recipe(request: GenerateRequest):
         if len(filtered_ingredients) < 1:
             raise HTTPException(
                 status_code=422, 
-                detail="At least one non-default ingredient is required (ingredients like water, salt, and oil do not count)"
+                detail=i18n.get_message(i18n.MIN_INGREDIENTS, request.lang)
             )
         
         # Step 3: Invoke graph with filtered ingredients
@@ -71,6 +85,7 @@ def generate_recipe(request: GenerateRequest):
             "ingredients": filtered_ingredients,
             "original_ingredients": request.ingredients,  # Keep originals for reference
             "difficulty": request.difficulty,
+            "lang": request.lang,
             "recipe": None,
             "extra_ingredients": [],
             "extra_count": 0,
@@ -107,14 +122,17 @@ def generate_recipe(request: GenerateRequest):
         conn = get_db_connection()
         log_error(conn, "UnexpectedError", str(e))
         conn.close()
-        raise HTTPException(status_code=500, detail="Internal Server Error")
+        raise HTTPException(
+            status_code=500, 
+            detail=i18n.get_message(i18n.INTERNAL_SERVER_ERROR, request.lang)
+        )
 
 
 @app.post("/modify")
 def modify_recipe(request: ModifyRequest):
     """
     Modify or regenerate a recipe with updated ingredients.
-    
+        
     Use cases:
     - User didn't like the recipe, wants a different one
     - User wants to add new ingredients
@@ -132,7 +150,7 @@ def modify_recipe(request: ModifyRequest):
         if len(filtered_ingredients) < 1:
             raise HTTPException(
                 status_code=422,
-                detail="At least one non-default ingredient is required"
+                detail=i18n.get_message(i18n.MIN_INGREDIENTS, request.lang)
             )
         
         # Invoke graph - starts fresh with new ingredient list
@@ -140,6 +158,7 @@ def modify_recipe(request: ModifyRequest):
             "ingredients": filtered_ingredients,
             "original_ingredients": all_ingredients,
             "difficulty": request.difficulty,
+            "lang": request.lang,
             "recipe": None,
             "extra_ingredients": [],
             "extra_count": 0,
@@ -169,14 +188,20 @@ def modify_recipe(request: ModifyRequest):
         conn = get_db_connection()
         log_error(conn, "UnexpectedError", str(e))
         conn.close()
-        raise HTTPException(status_code=500, detail="Internal Server Error")
+        raise HTTPException(
+            status_code=500, 
+            detail=i18n.get_message(i18n.INTERNAL_SERVER_ERROR, request.lang)
+        )
 
 
 @app.post("/feedback")
 def handle_feedback(request: FeedbackRequest):
     """Cache approved recipes for future use"""
     if not request.approved:
-        return {"status": "rejected", "message": "Please try again with different ingredients."}
+        return {
+            "status": "rejected", 
+            "message": i18n.get_message(i18n.FEEDBACK_REJECTED, request.lang)
+        }
     
     conn = get_db_connection()
     try:
@@ -197,9 +222,16 @@ def handle_feedback(request: FeedbackRequest):
             json.dumps(request.recipe.get("metadata", {}))
         ))
         conn.commit()
-        return {"status": "success", "recipe": request.recipe}
+        return {
+            "status": "success", 
+            "recipe": request.recipe,
+            "message": i18n.get_message(i18n.FEEDBACK_SUCCESS, request.lang)
+        }
     except Exception as e:
         log_error(conn, "FeedbackError", str(e))
-        raise HTTPException(status_code=500, detail="Failed to save your feedback")
+        raise HTTPException(
+            status_code=500, 
+            detail=i18n.get_message(i18n.FEEDBACK_SAVE_FAILED, request.lang)
+        )
     finally:
         conn.close()
