@@ -31,7 +31,9 @@ def test_generate_endpoint_success():
                 "steps": ["cook"],
                 "metadata": {}
             },
-            "needs_approval": False
+            "extra_ingredients": [],
+            "iteration_count": 1,
+            "error": None
         }
         
         response = client.post("/generate", json={
@@ -40,24 +42,26 @@ def test_generate_endpoint_success():
         })
         assert response.status_code == 200
         data = response.json()
-        assert data["name"] == "API Pasta"
+        assert data["status"] == "success"
+        assert data["recipe"]["name"] == "API Pasta"
 
-def test_generate_endpoint_needs_approval():
+def test_generate_endpoint_error_response():
+    """Test that error responses include extra ingredients tried"""
     client = TestClient(app)
     with patch('api.graph') as mock_graph:
         mock_graph.invoke.return_value = {
-            "recipe": {"name": "Test"},
-            "needs_approval": True,
-            "error": "Needs extra salt"
+            "recipe": None,
+            "error": "İlettiğiniz malzemelerle uygun bir tarif bulunamadı",
+            "extra_ingredients": ["garlic", "lemon"]
         }
         response = client.post("/generate", json={
-            "ingredients": ["salt", "pepper", "oil"], 
+            "ingredients": ["chicken", "rice", "onion"], 
             "difficulty": "intermediate"
         })
         assert response.status_code == 200
         data = response.json()
-        assert data["status"] == "needs_approval"
-        assert data["reasoning"] == "Needs extra salt"
+        assert data["status"] == "error"
+        assert "extra_ingredients_tried" in data
 
 def test_feedback_endpoint_approval():
     client = TestClient(app)

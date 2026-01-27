@@ -60,25 +60,28 @@ class RecipeAgent:
         prompt = f"""
         You are a professional chef creating a recipe.
         
-        User's Ingredients: {', '.join(ingredients)}
+        AVAILABLE INGREDIENTS:
+        - User's Ingredients: {', '.join(ingredients)}
+        - Default Ingredients (always available): {default_ingredients_list}
+        
         Difficulty Level: {difficulty.upper()} - {difficulty_guidance.get(difficulty, '')}
         
-        DEFAULT INGREDIENTS (assumed available, use freely):
-        {default_ingredients_list}
+        STRICT RULES (MUST FOLLOW):
+        1. You MUST ONLY use ingredients from the lists above
+        2. Do NOT add ANY ingredient that is not in User's Ingredients or Default Ingredients
+        3. This is a hard constraint - violation means the recipe is invalid
         
-        Instructions:
-        1. Create a {difficulty} difficulty recipe primarily using the user's ingredients
-        2. You MAY use any default ingredients (water, oil, salt, sugar, spices) without restriction
-        3. Try to avoid suggesting additional non-default ingredients
-        4. Adjust recipe complexity to match {difficulty} level:
-           - Easy: Simple steps, basic techniques
-           - Intermediate: Multiple steps, some technique required
-           - Hard: Complex techniques, multiple stages, precise timing
+        Recipe Guidelines:
+        1. Create a {difficulty} difficulty recipe using ONLY the available ingredients
+        2. Match complexity to {difficulty} level:
+           - Easy: Simple steps, basic techniques, 15-30 min
+           - Intermediate: Multiple steps, some technique required, 30-60 min
+           - Hard: Complex techniques, multiple stages, 60+ min
         
-        Return JSON with this structure:
+        Return JSON:
         {{
-            "name": "Recipe Name",
-            "ingredients": ["ingredient1", "ingredient2", ...],
+            "name": "Recipe Name (Turkish or English)",
+            "ingredients": ["only ingredients from available lists"],
             "steps": ["step1", "step2", ...],
             "metadata": {{"time": "20min", "difficulty": "{difficulty}"}}
         }}

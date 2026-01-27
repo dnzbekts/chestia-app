@@ -34,12 +34,12 @@ class ReviewAgent:
         
         prompt = f"""
         Role: Senior Culinary Reviewer
-        Task: Validate if the generated recipe is logically sound and matches difficulty.
+        Task: Validate recipe and suggest improvements if invalid.
         
         User Ingredients: {', '.join(user_ingredients)}
         Requested Difficulty: {difficulty}
         
-        DEFAULT INGREDIENTS (assumed available in every household, don't count as extras):
+        DEFAULT INGREDIENTS (always available, don't count as extras):
         {default_ingredients_list}
         
         Generated Recipe:
@@ -47,21 +47,24 @@ class ReviewAgent:
         Ingredients: {', '.join(recipe.get('ingredients', []))}
         Steps: {', '.join(recipe.get('steps', []))}
         
-        Requirements:
-        1. Recipe MAY freely use any DEFAULT ingredients (water, oil, salt, sugar, spices like pepper, paprika, cumin, etc.)
-        2. Recipe should primarily use the user-provided ingredients
-        3. If recipe uses NON-DEFAULT ingredients NOT in the user list, mark as INVALID
-        4. Are the steps logical for these ingredients?
-        5. Is this a real cooking recipe?
-        6. NEW: Does recipe complexity match {difficulty} difficulty?
+        VALIDATION RULES:
+        1. Recipe MAY use any DEFAULT ingredients freely
+        2. Recipe MUST primarily use User Ingredients
+        3. If recipe uses NON-DEFAULT ingredients NOT in user list -> INVALID
+        4. Steps must be logical and achievable
+        5. Must be a real, edible recipe
+        6. Complexity must match {difficulty}:
            - Easy: Simple steps, minimal technique
-           - Intermediate: Moderate complexity, some skill needed
-           - Hard: Advanced techniques, precise execution
+           - Intermediate: Moderate complexity
+           - Hard: Advanced techniques
         
-        Return JSON in this format:
+        IMPORTANT: If the recipe is INVALID, suggest 1-2 common ingredients that could help create a valid recipe.
+        
+        Return JSON:
         {{
-            "valid": boolean,
-            "reasoning": "Detailed explanation of why it is valid or invalid, including difficulty assessment"
+            "valid": true/false,
+            "reasoning": "Detailed explanation including difficulty assessment",
+            "suggested_extras": ["ingredient1", "ingredient2"]  // Only if invalid, max 2 suggestions
         }}
         """
         

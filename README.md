@@ -6,35 +6,35 @@
 
 ## ✨ Features
 
-- **AI-Powered Recipe Generation**: Leverages Google Gemini and CrewAI to craft recipes based on what you have in your fridge.
-- **Difficulty-Based Recipes**: Choose your preferred difficulty level (Easy, Intermediate, Hard) to get recipes that match your cooking skills and time availability.
-- **Smart Default Ingredients**: Automatically assumes basic household staples (water, oil, salt, sugar, spices) are available, reducing user input friction and improving cache efficiency.
-- **Human-in-the-Loop**: Intelligent fallback system that suggests 1-2 extra ingredients when necessary, requiring user approval.
-- **Hallucination Control**: Dedicated verification agents ensure recipes are logically sound and chemically possible.
-- **Smart Caching**: Approved recipes are stored in SQLite with difficulty + ingredients as cache key to provide instant results for repeated requests and save LLM costs.
-- **Premium Design**: A high-end, dark-mode focused experience built with Next.js and Tailwind CSS v4.
+- **AI-Powered Recipe Generation**: Leverages Google Gemini to craft recipes based on what you have in your fridge.
+- **Difficulty-Based Recipes**: Choose Easy, Intermediate, or Hard to get recipes that match your cooking skills.
+- **Smart Default Ingredients**: Automatically assumes basic pantry staples (water, oil, salt, spices) are available.
+- **Auto-Retry with Suggestions**: If a recipe can't be made with your ingredients, the system automatically tries adding 1-2 extras (max 3 attempts).
+- **Hallucination Control**: Verification agents ensure recipes are logically sound and don't include imaginary ingredients.
+- **Smart Caching**: Approved recipes are stored in SQLite (difficulty + ingredients as key) for instant repeat requests.
+- **Recipe Modification**: Don't like the result? Request a new version or add ingredients via `/modify` endpoint.
+- **Premium Design**: Dark-mode focused experience built with Next.js and Tailwind CSS v4.
 
 ---
 
 ## 🏗️ Architecture
 
-Chestia follows a multi-agent orchestration pattern using **LangGraph** and **CrewAI**.
-
 ```mermaid
 graph TD
-    User([User Input]) --> Gateway[API Gateway /fastapi]
-    Gateway --> Cache{SQLite Cache}
-    Cache -- Hit --> Result([Approved Recipe])
-    Cache -- Miss --> Agents[Multi-Agent System]
+    User([User: ingredients + difficulty]) --> Filter[Filter Default Ingredients]
+    Filter --> Cache{SQLite Cache}
+    Cache -- Hit --> Result([Return Recipe])
+    Cache -- Miss --> Generate[Generate Recipe]
     
-    subgraph Agents [LangGraph / CrewAI Orchestration]
-        RA[Recipe Agent] --> VA[Verification Agent]
-        VA --> HA[Hallucination Agent]
-    end
+    Generate --> Review{Valid Recipe?}
+    Review -- Yes --> Result
+    Review -- No, iter<3 --> AddExtras[Add 1-2 Extras]
+    AddExtras --> Generate
+    Review -- No, iter>=3 --> Error([Error: No Recipe Found])
     
-    Agents -- Needs Approval --> HitL([Human-in-the-Loop])
-    HitL -- Approved --> Result
-    Result --> Cache
+    Result --> Modify{User Satisfied?}
+    Modify -- Yes --> Done([Cache & Done])
+    Modify -- No --> Generate
 ```
 
 ---

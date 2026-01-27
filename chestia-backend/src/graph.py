@@ -5,13 +5,15 @@ from agents.review_agent import ReviewAgent
 from database import get_db_connection, find_recipe_by_ingredients
 
 class GraphState(TypedDict):
-    ingredients: List[str]
-    difficulty: str  # 'easy', 'intermediate', or 'hard'
-    recipe: Optional[Dict[str, Any]]
-    needs_approval: bool
-    extra_ingredients: List[str]
-    error: Optional[str]
-    iteration_count: int
+    ingredients: List[str]              # Filtered, non-default ingredients
+    original_ingredients: List[str]     # User's original input (for reference)
+    difficulty: str                     # 'easy', 'intermediate', or 'hard'
+    recipe: Optional[Dict[str, Any]]    # Generated recipe
+    extra_ingredients: List[str]        # Track what extras were added
+    extra_count: int                    # How many extras added (max 2)
+    error: Optional[str]                # Error message if any
+    iteration_count: int                # Current iteration (max 3)
+
 
 def search_cache_node(state: GraphState):
     """Check if a recipe for these ingredients + difficulty exists in SQLite"""
@@ -28,23 +30,35 @@ def search_cache_node(state: GraphState):
         conn.close()
     return {"iteration_count": state.get("iteration_count", 0) + 1}
 
+
 def generate_recipe_node(state: GraphState):
-    """Generate a recipe using LLM, respecting difficulty level"""
+    """Generate a recipe using LLM with STRICT ingredient constraints"""
     agent = RecipeAgent()
     try:
-        # Use existing ingredients list and difficulty
         result = agent.generate(
             state["ingredients"],
             state["difficulty"]
         )
         if "error" in result:
-             return {"error": result["error"]}
-        return {"recipe": result, "iteration_count": state.get("iteration_count", 0) + 1}
+            return {"error": result["error"]}
+        return {
+            "recipe": result, 
+            "iteration_count": state.get("iteration_count", 0) + 1
+        }
     except Exception as e:
         return {"error": str(e)}
 
+
 def review_recipe_node(state: GraphState):
-    """Validate the generated recipe for hallucinations and difficulty match"""
+    """
+    Validate recipe and handle auto-retry with extra ingredients.
+    
+    Logic:
+    1. If valid -> proceed to END
+    2. If invalid and has suggestions and extra_count < 2 and iteration < 3:
+       -> Add suggested extras and retry
+    3. Otherwise -> Return error
+    """
     if state.get("error") or not state.get("recipe"):
         return state
 
@@ -55,41 +69,75 @@ def review_recipe_node(state: GraphState):
         state["difficulty"]
     )
     
-    if not review["valid"]:
-        # Check if it's because of extra ingredients
-        reason = review["reasoning"].lower()
-        if "extra" in reason or "additional" in reason:
-            # Extract suggested ingredients (simplified)
-            return {
-                "needs_approval": True,
-                "error": review["reasoning"],
-                "iteration_count": state.get("iteration_count", 0) + 1
-            }
-        else:
-            # Complete hallucination or invalid recipe
-            return {
-                "error": review["reasoning"],
-                "iteration_count": state.get("iteration_count", 0) + 1
-            }
+    if review.get("valid"):
+        # Recipe is valid, no changes needed
+        return {"error": None}
     
-    return {"iteration_count": state.get("iteration_count", 0) + 1}
+    # Recipe is invalid - check if we can retry
+    current_iteration = state.get("iteration_count", 0)
+    current_extra_count = state.get("extra_count", 0)
+    
+    # Check limits
+    if current_iteration >= 3:
+        return {
+            "error": "No suitable recipe could be found with the ingredients you provided. Please try again with different ingredients.",
+            "recipe": None
+        }
+    
+    # Try to get suggested extras from review
+    suggested = review.get("suggested_extras", [])
+    
+    if suggested and current_extra_count < 2:
+        # Add up to 2 extras total
+        extras_to_add = suggested[:2 - current_extra_count]
+        new_ingredients = state["ingredients"] + extras_to_add
+        new_extras = state.get("extra_ingredients", []) + extras_to_add
+        
+        return {
+            "ingredients": new_ingredients,
+            "extra_ingredients": new_extras,
+            "extra_count": current_extra_count + len(extras_to_add),
+            "recipe": None,  # Clear recipe to trigger regeneration
+            "error": None
+        }
+    
+    # No suggestions or max extras reached, but still have iterations
+    if current_iteration < 3:
+        return {
+            "recipe": None,  # Clear to retry
+            "error": None
+        }
+    
+    # All retries exhausted
+    return {
+        "error": "No suitable recipe could be found with the ingredients you provided. Please try again with different ingredients.",
+        "recipe": None
+    }
+
 
 def should_generate(state: GraphState):
-    """Condition to check if we need to generate or we have a cache hit"""
+    """Condition after cache check"""
     if state.get("recipe"):
         return "review"
     return "generate"
 
+
 def route_after_review(state: GraphState):
     """Route based on review outcome"""
-    if state.get("needs_approval"):
+    # If there's an error, we're done
+    if state.get("error"):
         return END
+    
+    # If no recipe (was cleared for retry), go back to generate
     if not state.get("recipe"):
-        # If recipe was cleared due to logic error, retry unless we hit max
+        # Check iteration limit
         if state.get("iteration_count", 0) >= 3:
             return END
         return "generate"
+    
+    # Valid recipe exists, we're done
     return END
+
 
 def create_graph():
     workflow = StateGraph(GraphState)
@@ -116,7 +164,7 @@ def create_graph():
         route_after_review,
         {
             "generate": "generate_recipe",
-            "end": END
+            END: END
         }
     )
     
