@@ -7,9 +7,11 @@
 ## ✨ Features
 
 - **AI-Powered Recipe Generation**: Leverages Google Gemini and CrewAI to craft recipes based on what you have in your fridge.
+- **Difficulty-Based Recipes**: Choose your preferred difficulty level (Easy, Intermediate, Hard) to get recipes that match your cooking skills and time availability.
+- **Smart Default Ingredients**: Automatically assumes basic household staples (water, oil, salt, sugar, spices) are available, reducing user input friction and improving cache efficiency.
 - **Human-in-the-Loop**: Intelligent fallback system that suggests 1-2 extra ingredients when necessary, requiring user approval.
 - **Hallucination Control**: Dedicated verification agents ensure recipes are logically sound and chemically possible.
-- **Smart Caching**: Approved recipes are stored in SQLite to provide instant results for repeated requests and save LLM costs.
+- **Smart Caching**: Approved recipes are stored in SQLite with difficulty + ingredients as cache key to provide instant results for repeated requests and save LLM costs.
 - **Premium Design**: A high-end, dark-mode focused experience built with Next.js and Tailwind CSS v4.
 
 ---

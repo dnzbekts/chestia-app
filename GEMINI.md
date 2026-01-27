@@ -67,15 +67,16 @@ This document serves as the single source of truth for development rules, archit
 ## 4. Workflow Specifics
 
 ### 4.1 Recipe Generation Loop
-1.  **Input:** User provides ingredients.
-2.  **Check DB:** If exists -> Return Recipe.
-3.  **Generate:** If not -> Agents attempt to build recipe.
+1.  **Input:** User provides ingredients (minimum 3 required).
+2.  **Validation:** API rejects requests with less than 3 ingredients (422 error).
+3.  **Check DB:** If exists -> Return Recipe.
+4.  **Generate:** If not -> Agents attempt to build recipe.
     -   *Success:* Display Recipe.
     -   *Partial:* Agents propose +1/2 ingredients.
         -   *Ask User:* "Can we add X?"
         -   *Yes:* Generate & Display.
         -   *No:* Loop back for new suggestion or strict generation.
-4.  **Save:** Store approved result in SQLite.
+5.  **Save:** Store approved result in SQLite.
 
 ### 4.2 Error Handling
 -   **Frontend:** Display "Currently unable to process your transaction" after 3 failed retries.

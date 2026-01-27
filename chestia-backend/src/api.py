@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field, validator
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Literal
 import json
 import re
 from graph import create_graph
@@ -12,7 +12,11 @@ app = FastAPI(title="Chestia Backend")
 graph = create_graph()
 
 class GenerateRequest(BaseModel):
-    ingredients: List[str] = Field(..., min_items=1, max_items=20)
+    ingredients: List[str] = Field(..., min_items=3, max_items=20)
+    difficulty: Literal["easy", "intermediate", "hard"] = Field(
+        ...,
+        description="Recipe difficulty level: easy, intermediate, or hard"
+    )
 
     @validator('ingredients', each_item=True)
     def validate_ingredient_chars(cls, v):
@@ -24,6 +28,7 @@ class GenerateRequest(BaseModel):
 
 class FeedbackRequest(BaseModel):
     ingredients: List[str]
+    difficulty: str
     approved: bool
     recipe: Dict[str, Any]
 
@@ -31,15 +36,15 @@ class FeedbackRequest(BaseModel):
 def generate_recipe(request: GenerateRequest):
     try:
         # Initial state
-        initial_state = {
-            "ingredients": request.ingredients, 
-            "recipe": None, 
-            "error": None,
+        result = graph.invoke({
+            "ingredients": request.ingredients,
+            "difficulty": request.difficulty,
+            "recipe": None,
             "needs_approval": False,
             "extra_ingredients": [],
+            "error": None,
             "iteration_count": 0
-        }
-        result = graph.invoke(initial_state)
+        })
         
         # If the graph needs approval, return the intermediate state
         if result.get("needs_approval"):
@@ -69,6 +74,8 @@ def generate_recipe(request: GenerateRequest):
 @app.post("/feedback")
 def handle_feedback(request: FeedbackRequest):
     """Handle user approval or rejection of suggested ingredients"""
+    from config import filter_default_ingredients
+    
     if not request.approved:
         return {"status": "rejected", "message": "Please provide different ingredients."}
     
@@ -76,13 +83,18 @@ def handle_feedback(request: FeedbackRequest):
     conn = get_db_connection()
     try:
         init_db(conn) # Ensure tables exist
+        
+        # Filter default ingredients before caching
+        non_default_ingredients = filter_default_ingredients(request.ingredients)
+        
         cursor = conn.cursor()
         cursor.execute("""
-            INSERT INTO recipes (name, ingredients, steps, metadata)
-            VALUES (?, ?, ?, ?)
+            INSERT INTO recipes (name, ingredients, difficulty, steps, metadata)
+            VALUES (?, ?, ?, ?, ?)
         """, (
             request.recipe["name"], 
-            json.dumps(sorted(request.ingredients)), 
+            json.dumps(sorted(non_default_ingredients)),  # Store only non-defaults
+            request.difficulty,  # Include difficulty in cache
             json.dumps(request.recipe["steps"]), 
             json.dumps(request.recipe.get("metadata", {}))
         ))

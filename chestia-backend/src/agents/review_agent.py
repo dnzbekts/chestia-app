@@ -18,14 +18,29 @@ class ReviewAgent:
             temperature=0
         )
 
-    def validate(self, recipe: Dict[str, Any], user_ingredients: List[str]) -> Dict[str, Any]:
-        """Validate recipe for hallucinations and logic Errors"""
+    def validate(self, recipe: Dict[str, Any], user_ingredients: List[str], difficulty: str) -> Dict[str, Any]:
+        """
+        Validate recipe for hallucinations, logic errors, and difficulty match.
+        
+        Args:
+            recipe: Generated recipe to validate
+            user_ingredients: Original user-provided ingredients
+            difficulty: Requested difficulty level
+        """
+        from config import DEFAULT_INGREDIENTS
+        
+        # Format default ingredients list for prompt
+        default_ingredients_list = ', '.join(sorted(DEFAULT_INGREDIENTS))
         
         prompt = f"""
         Role: Senior Culinary Reviewer
-        Task: Validate if the generated recipe is logically sound and uses ONLY the provided ingredients or a maximum of 1-2 common base ingredients (like water, salt, oil) if absolutely necessary.
+        Task: Validate if the generated recipe is logically sound and matches difficulty.
         
         User Ingredients: {', '.join(user_ingredients)}
+        Requested Difficulty: {difficulty}
+        
+        DEFAULT INGREDIENTS (assumed available in every household, don't count as extras):
+        {default_ingredients_list}
         
         Generated Recipe:
         Name: {recipe.get('name')}
@@ -33,14 +48,20 @@ class ReviewAgent:
         Steps: {', '.join(recipe.get('steps', []))}
         
         Requirements:
-        1. Does it use ingredients NOT in the user list (excluding basics like water/salt/oil)?
-        2. Are the steps logical for these ingredients?
-        3. Is it a real cooking recipe?
+        1. Recipe MAY freely use any DEFAULT ingredients (water, oil, salt, sugar, spices like pepper, paprika, cumin, etc.)
+        2. Recipe should primarily use the user-provided ingredients
+        3. If recipe uses NON-DEFAULT ingredients NOT in the user list, mark as INVALID
+        4. Are the steps logical for these ingredients?
+        5. Is this a real cooking recipe?
+        6. NEW: Does recipe complexity match {difficulty} difficulty?
+           - Easy: Simple steps, minimal technique
+           - Intermediate: Moderate complexity, some skill needed
+           - Hard: Advanced techniques, precise execution
         
         Return JSON in this format:
         {{
             "valid": boolean,
-            "reasoning": "Detailed explanation of why it is valid or invalid"
+            "reasoning": "Detailed explanation of why it is valid or invalid, including difficulty assessment"
         }}
         """
         

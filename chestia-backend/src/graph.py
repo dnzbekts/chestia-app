@@ -6,6 +6,7 @@ from database import get_db_connection, find_recipe_by_ingredients
 
 class GraphState(TypedDict):
     ingredients: List[str]
+    difficulty: str  # 'easy', 'intermediate', or 'hard'
     recipe: Optional[Dict[str, Any]]
     needs_approval: bool
     extra_ingredients: List[str]
@@ -13,10 +14,14 @@ class GraphState(TypedDict):
     iteration_count: int
 
 def search_cache_node(state: GraphState):
-    """Check if the recipe exists in SQLite"""
+    """Check if a recipe for these ingredients + difficulty exists in SQLite"""
     conn = get_db_connection()
     try:
-        recipe = find_recipe_by_ingredients(conn, state["ingredients"])
+        recipe = find_recipe_by_ingredients(
+            conn,
+            state["ingredients"],
+            state["difficulty"]
+        )
         if recipe:
             return {"recipe": recipe, "iteration_count": state.get("iteration_count", 0) + 1}
     finally:
@@ -24,37 +29,50 @@ def search_cache_node(state: GraphState):
     return {"iteration_count": state.get("iteration_count", 0) + 1}
 
 def generate_recipe_node(state: GraphState):
-    """Generate a recipe using LLM"""
+    """Generate a recipe using LLM, respecting difficulty level"""
     agent = RecipeAgent()
     try:
-        # Use existing ingredients list
-        result = agent.generate(state["ingredients"])
+        # Use existing ingredients list and difficulty
+        result = agent.generate(
+            state["ingredients"],
+            state["difficulty"]
+        )
         if "error" in result:
              return {"error": result["error"]}
-        return {"recipe": result}
+        return {"recipe": result, "iteration_count": state.get("iteration_count", 0) + 1}
     except Exception as e:
         return {"error": str(e)}
 
 def review_recipe_node(state: GraphState):
-    """Validate the generated recipe"""
+    """Validate the generated recipe for hallucinations and difficulty match"""
     if state.get("error") or not state.get("recipe"):
         return state
 
     reviewer = ReviewAgent()
-    review = reviewer.validate(state["recipe"], state["ingredients"])
+    review = reviewer.validate(
+        state["recipe"],
+        state["ingredients"],
+        state["difficulty"]
+    )
     
     if not review["valid"]:
         # Check if it's because of extra ingredients
         reason = review["reasoning"].lower()
-        if "extra" in reason or "not provided" in reason:
-            # For simplicity in this MVP, we assume it's an ingredient suggestion
-            # In a real app we'd parse the specific ingredients
-            return {"needs_approval": True, "error": review["reasoning"]}
-        
-        # Other errors (hallucinations/logic) -> Retry by clearing recipe (triggers back to generate)
-        return {"recipe": None, "error": review["reasoning"]}
+        if "extra" in reason or "additional" in reason:
+            # Extract suggested ingredients (simplified)
+            return {
+                "needs_approval": True,
+                "error": review["reasoning"],
+                "iteration_count": state.get("iteration_count", 0) + 1
+            }
+        else:
+            # Complete hallucination or invalid recipe
+            return {
+                "error": review["reasoning"],
+                "iteration_count": state.get("iteration_count", 0) + 1
+            }
     
-    return {"needs_approval": False, "error": None}
+    return {"iteration_count": state.get("iteration_count", 0) + 1}
 
 def should_generate(state: GraphState):
     """Condition to check if we need to generate or we have a cache hit"""

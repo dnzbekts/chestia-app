@@ -27,14 +27,17 @@ def test_generate_endpoint_success():
         mock_graph.invoke.return_value = {
             "recipe": {
                 "name": "API Pasta",
-                "ingredients": ["pasta"],
+                "ingredients": ["pasta", "tomato", "cheese"],
                 "steps": ["cook"],
                 "metadata": {}
             },
             "needs_approval": False
         }
         
-        response = client.post("/generate", json={"ingredients": ["pasta"]})
+        response = client.post("/generate", json={
+            "ingredients": ["pasta", "tomato", "cheese"],
+            "difficulty": "easy"
+        })
         assert response.status_code == 200
         data = response.json()
         assert data["name"] == "API Pasta"
@@ -47,7 +50,10 @@ def test_generate_endpoint_needs_approval():
             "needs_approval": True,
             "error": "Needs extra salt"
         }
-        response = client.post("/generate", json={"ingredients": ["salt"]})
+        response = client.post("/generate", json={
+            "ingredients": ["salt", "pepper", "oil"], 
+            "difficulty": "intermediate"
+        })
         assert response.status_code == 200
         data = response.json()
         assert data["status"] == "needs_approval"
@@ -57,7 +63,8 @@ def test_feedback_endpoint_approval():
     client = TestClient(app)
     recipe = {"name": "Approved Recipe", "steps": ["step1"]}
     response = client.post("/feedback", json={
-        "ingredients": ["egg"],
+        "ingredients": ["egg", "milk", "butter"],
+        "difficulty": "easy",
         "approved": True,
         "recipe": recipe
     })
@@ -84,8 +91,29 @@ def test_generate_endpoint_error_masking():
         # Simulate a crash/error in the graph
         mock_graph.invoke.side_effect = Exception("Internal SQL Error detail that should be hidden")
         
-        response = client.post("/generate", json={"ingredients": ["pasta"]})
+        response = client.post("/generate", json={
+            "ingredients": ["pasta", "garlic", "oil"],
+            "difficulty": "hard"
+        })
         assert response.status_code == 500
         data = response.json()
         assert data["detail"] == "Internal Server Error"
         assert "Internal SQL Error" not in data["detail"]
+
+def test_generate_endpoint_insufficient_ingredients():
+    """Test that API rejects requests with less than 3 ingredients"""
+    if not app:
+        assert False, "api module not found"
+    client = TestClient(app)
+    
+    # Test with 0 ingredients
+    response = client.post("/generate", json={"ingredients": []})
+    assert response.status_code == 422
+    
+    # Test with 1 ingredient
+    response = client.post("/generate", json={"ingredients": ["tomato"]})
+    assert response.status_code == 422
+    
+    # Test with 2 ingredients
+    response = client.post("/generate", json={"ingredients": ["tomato", "pasta"]})
+    assert response.status_code == 422

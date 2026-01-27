@@ -21,6 +21,7 @@ def init_db(conn):
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL,
             ingredients JSON NOT NULL,
+            difficulty TEXT NOT NULL,
             steps JSON NOT NULL,
             metadata JSON
         )
@@ -39,15 +40,35 @@ def init_db(conn):
     
     conn.commit()
 
-def find_recipe_by_ingredients(conn, ingredients: List[str]):
-    """Find a recipe matching the exact set of ingredients"""
+def find_recipe_by_ingredients(conn, ingredients: List[str], difficulty: str):
+    """
+    Find a recipe matching non-default ingredients AND difficulty level.
+    
+    Default ingredients (water, salt, oil, spices, etc.) are filtered out
+    before lookup to optimize cache hits. Difficulty is part of cache key.
+    
+    This means:
+    - ["pasta", "tomato", "salt"], "easy" → Different from "hard"
+    - ["pasta", "tomato"], "easy" with defaults → Same cache as without defaults
+    
+    Args:
+        conn: Database connection
+        ingredients: List of ingredient names (may include defaults)
+        difficulty: Recipe difficulty level ('easy', 'intermediate', 'hard')
+        
+    Returns:
+        Recipe dict if found, None otherwise
+    """
+    from config import filter_default_ingredients
+    
     cursor = conn.cursor()
-    # Normalize/Sort for consistent lookup
-    ingredients_json = json.dumps(sorted(ingredients))
+    # Filter out default ingredients and sort for consistent lookup
+    non_default_ingredients = filter_default_ingredients(ingredients)
+    ingredients_json = json.dumps(sorted(non_default_ingredients))
     
     cursor.execute("""
-        SELECT * FROM recipes WHERE ingredients = ?
-    """, (ingredients_json,))
+        SELECT * FROM recipes WHERE ingredients = ? AND difficulty = ?
+    """, (ingredients_json, difficulty))
     
     row = cursor.fetchone()
     if row:
