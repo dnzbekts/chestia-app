@@ -273,13 +273,22 @@ pytest tests/test_integration.py -v
 
 ---
 
-## 🤖 CopilotKit Integration (Planned)
+## 🤖 CopilotKit Integration
 
-CopilotKit will serve as a **passive bridge** between the frontend and the agentic backend:
+CopilotKit serves as the **bridge** between the frontend and the agentic backend, enabling a rich AI user experience.
 
-1. **Strict Relay**: The frontend forwards user ingredient inputs via CopilotKit
-2. **State Synchronization**: CopilotKit manages the conversation state and relays multi-agent orchestration results
-3. **No Local Generation**: All intelligence resides in the backend; the frontend focuses strictly on presentation
+### Architecture
+
+1. **Remote Endpoint**: The backend exposes a strictly typed CopilotKit endpoint at `/copilotkit`.
+2. **LangGraph Adapter**: A specialized wrapper (`copilotkit_agent.py`) adapts the internal LangGraph workflow to the AG-UI protocol.
+3. **State Management**: CopilotKit manages the conversation state (`messages`, `ingredients`, `recipe`) and synchronizes it between frontend and backend.
+4. **Passive Execution**: The frontend does not generate recipes; it acts as a UI layer for the backend intelligence.
+
+### Integration Points
+
+- **Endpoint**: `POST /copilotkit` (Handled by CopilotKit SDK)
+- **Agent Name**: `chestia_recipe_agent`
+- **Output**: JSON-structured recipes compatible with the frontend UI components
 
 ---
 

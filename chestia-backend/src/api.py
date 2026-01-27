@@ -5,13 +5,33 @@ import json
 import re
 from graph import create_graph
 from database import get_db_connection, init_db, log_error
-from config import filter_default_ingredients
+from config import filter_default_ingredients, COPILOTKIT_AGENT_NAME, COPILOTKIT_AGENT_DESCRIPTION
 from utils import i18n
+
+# CopilotKit imports
+from copilotkit.integrations.fastapi import add_fastapi_endpoint
+from copilotkit import CopilotKitRemoteEndpoint, LangGraphAGUIAgent
+from copilotkit_agent import copilotkit_graph
 
 app = FastAPI(title="Chestia Backend")
 
 # Initialize the graph
 graph = create_graph()
+
+# Initialize CopilotKit Remote Endpoint with LangGraph AGUI agent
+copilotkit_sdk = CopilotKitRemoteEndpoint(
+    agents=[
+        LangGraphAGUIAgent(
+            name=COPILOTKIT_AGENT_NAME,
+            description=COPILOTKIT_AGENT_DESCRIPTION,
+            graph=copilotkit_graph,
+        )
+    ],
+)
+
+# Add CopilotKit endpoint to FastAPI
+add_fastapi_endpoint(app, copilotkit_sdk, "/copilotkit")
+
 
 class GenerateRequest(BaseModel):
     ingredients: List[str] = Field(..., min_length=3, max_length=20)

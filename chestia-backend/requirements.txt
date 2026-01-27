@@ -6,3 +6,5 @@ python-dotenv
 pytest
 fastapi
 uvicorn
+copilotkit
+httpx-sse

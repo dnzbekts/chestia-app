@@ -9,6 +9,10 @@ These ingredients are excluded from:
 
 from typing import List
 
+# CopilotKit Configuration
+COPILOTKIT_AGENT_NAME = "chestia_recipe_agent"
+COPILOTKIT_AGENT_DESCRIPTION = "Intelligent recipe generation from user-provided ingredients with auto-retry and validation"
+
 # Default ingredients available in every household
 # Includes both English and Turkish for better user flexibility
 DEFAULT_INGREDIENTS = {
