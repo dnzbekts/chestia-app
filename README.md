@@ -12,7 +12,9 @@
 - **Smart Default Ingredients**: Automatically assumes basic pantry staples (water, oil, salt, spices) are available
 - **Auto-Retry with Suggestions**: If a recipe can't be made with your ingredients, the system automatically tries adding 1-2 extras (max 3 attempts)
 - **Hallucination Control**: Verification agents ensure recipes are logically sound and don't include imaginary ingredients
-- **Smart Caching**: Approved recipes are stored in SQLite (difficulty + ingredients as key) for instant repeat requests
+- **Smart Caching**: Approved recipes are stored in SQLite. It uses dual-layer retrieval:
+  - **Exact Cache Check**: Instant hit for identical ingredient lists.
+  - **Semantic Search**: Fuzzy matching via vector embeddings (Gemini + `sqlite-vec`) for variations like "fusilli" vs "pasta".
 - **Recipe Modification**: Don't like the result? Request a new version or add ingredients via `/modify` endpoint
 - **Bilingual Support**: Full Turkish/English support for all API messages
 - **Premium Design**: Dark-mode focused experience built with Next.js and Tailwind CSS v4
@@ -26,27 +28,29 @@
 ```mermaid
 graph TD
     User([User: ingredients + difficulty]) --> Filter[Filter Default Ingredients]
-    Filter --> Cache{SQLite Cache}
-    Cache -- Hit --> Result([Return Recipe])
-    Cache -- Miss --> Search{"Web Search (Tavily)"}
+    Filter --> ExactCache{Exact Cache?}
+    ExactCache -- Hit --> Review[Review Agent]
+    ExactCache -- Miss --> SemanticCache{Semantic Search?}
     
-    Search -- Found --> Review{Valid Recipe?}
+    SemanticCache -- Hit --> Review
+    SemanticCache -- Miss --> Search{"Web Search (Tavily)"}
+    
+    Search -- Found --> Review
     Search -- Miss --> Generate[Generate Recipe]
     
     Generate --> Review
-    Review -- Yes --> Result
+    Review -- Yes --> Result([Return Recipe])
     Review -- No, iter<3 --> AddExtras[Add 1-2 Extras]
     AddExtras --> Generate
     Review -- No, iter>=3 --> Error([Error: No Recipe Found])
     
-    Result --> Modify{User Satisfied?}
-    Modify -- Yes --> Done([Cache & Done])
-    Modify -- No --> Generate
+    Result -- User Approves --> Feedback[POST /feedback]
+    Feedback --> Done([Cache & Done])
 ```
 
 ### Multi-Agent System
 
-The backend orchestrates two specialized AI agents using LangGraph:
+The backend orchestrates three specialized AI agents using LangGraph:
 
 1. **RecipeAgent** (`recipe_agent.py`)
    - Generates recipes using Google Gemini 1.5 Flash (temperature: 0.7)
@@ -79,8 +83,8 @@ The backend orchestrates two specialized AI agents using LangGraph:
 - **Orchestration**: LangGraph + CrewAI
 - **LLM**: Google Gemini 1.5 Flash (via `langchain-google-genai`)
 - **API Framework**: FastAPI + Uvicorn
-- **Database**: SQLite
-- **Testing**: pytest (8 test suites, including integration tests)
+- **Database**: SQLite with `sqlite-vec` extension for vector search
+- **Testing**: pytest (70 unit and integration tests)
 - **Utilities**:
   - `config.py`: Default ingredient filtering
   - `database.py`: SQLite operations & caching
@@ -255,7 +259,7 @@ The backend orchestrates two specialized AI agents using LangGraph:
 
 ```json
 {
-  "original_ingredients": ["chicken", "rice"],
+  "original_ingredients": ["chicken", "rice", "onion"],
   "new_ingredients": ["tomato"],
   "difficulty": "intermediate",
   "modification_note": "make it spicy",
@@ -271,7 +275,7 @@ The backend orchestrates two specialized AI agents using LangGraph:
 
 ```json
 {
-  "ingredients": ["chicken", "rice"],
+  "ingredients": ["chicken", "rice", "onion"],
   "difficulty": "easy",
   "approved": true,
   "recipe": { /* recipe object */ },
@@ -352,3 +356,6 @@ This project is private and proprietary.
 ---
 
 *Chestia - Elevating your culinary journey with AI.*
+
+---
+*Last reviewed: 2026-01-28*

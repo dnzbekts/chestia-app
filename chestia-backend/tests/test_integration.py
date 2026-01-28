@@ -165,24 +165,29 @@ def test_modify_recipe_success():
         assert data["recipe"]["name"] == "Modified Pasta"
 
 def test_feedback_success_en():
-    """Scenario 2.7: Verify feedback successfully saves (mocked)."""
-    with patch('api.get_db_connection') as mock_conn:
-        mock_cursor = MagicMock()
-        mock_conn.return_value.cursor.return_value = mock_cursor
+    """Scenario 2.7: Verify feedback successfully saves."""
+    # We need to mock generate_embedding because save_recipe calls it
+    with patch('database.generate_embedding') as mock_embed:
+        mock_embed.return_value = [0.1] * 768
         
-        response = client.post("/feedback", json={
-            "ingredients": ["pasta", "tomato", "cheese"],
-            "difficulty": "easy",
-            "approved": True,
-            "recipe": {"name": "Best Pasta", "steps": ["step"]},
-            "lang": "en"
-        })
-        
-        assert response.status_code == 200
-        data = response.json()
-        assert data["status"] == "success"
-        assert data["message"] == i18n.get_message(i18n.FEEDBACK_SUCCESS, "en")
-        assert mock_cursor.execute.called
+        with patch('api.get_db_connection') as mock_conn:
+            mock_cursor = MagicMock()
+            mock_conn.return_value.cursor.return_value = mock_cursor
+            
+            response = client.post("/feedback", json={
+                "ingredients": ["pasta", "tomato", "cheese"],
+                "difficulty": "easy",
+                "approved": True,
+                "recipe": {"name": "Best Pasta", "steps": ["step"]},
+                "lang": "en"
+            })
+            
+            assert response.status_code == 200
+            data = response.json()
+            assert data["status"] == "success"
+            assert data["message"] == i18n.get_message(i18n.FEEDBACK_SUCCESS, "en")
+            # Should be called twice: once for recipes, once for vec_recipes
+            assert mock_cursor.execute.call_count >= 2
 
 def test_min_ingredients_validation_en():
     """Test that < 3 ingredients returns 422 error."""

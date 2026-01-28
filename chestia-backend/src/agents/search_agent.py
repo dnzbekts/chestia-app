@@ -1,4 +1,4 @@
-from langchain_community.tools.tavily_search import TavilySearchResults
+from langchain_tavily import TavilySearch
 from langchain_google_genai import ChatGoogleGenerativeAI
 from typing import List, Optional, Dict, Any
 import os
@@ -8,21 +8,25 @@ from config import DEFAULT_INGREDIENTS
 class SearchAgent:
     def __init__(self):
         api_key = os.getenv("GOOGLE_API_KEY")
-        if not api_key:
+        if not api_key or api_key == "YOUR_KEY_HERE":
             raise RuntimeError("GOOGLE_API_KEY is not set")
+
+        search_api_key = os.getenv("TAVILY_API_KEY")
+        if not search_api_key or search_api_key == "YOUR_KEY_HERE":
+            raise RuntimeError("TAVILY_API_KEY is not set")
             
         self.llm = ChatGoogleGenerativeAI(
-            model="gemini-1.5-flash",
+            model="gemini-2.0-flash",
             google_api_key=api_key,
             temperature=0.1 # Low temp for parsing
         )
         
         # Initialize Tavily tool
         # Ensure TAVILY_API_KEY is in env or passed explicitly
-        self.search_tool = TavilySearchResults(
+        self.search_tool = TavilySearch(
             max_results=3,
             search_depth="advanced",
-            key=os.getenv("TAVILY_API_KEY")
+            api_key=search_api_key
         )
 
     def search(self, ingredients: List[str], difficulty: str) -> Optional[Dict[str, Any]]:
@@ -40,7 +44,7 @@ class SearchAgent:
             # 2. Execute Search
             results = self.search_tool.invoke({"query": query})
             
-            if not results:
+            if not results or not isinstance(results, list):
                 return None
                 
             # Combine content for parsing

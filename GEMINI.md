@@ -45,6 +45,7 @@ This document serves as the single source of truth for development rules, archit
 - **Agent Design:** Follow `langchain-architecture` patterns. Use modular Chains/Graphs.
 - **Code Quality:** Adhere to `software-architecture` principles (DRY, SOLID).
 - **Clean Code:** Meaningful variable names, consistent formatting, and self-documenting code.
+- **Rule:** Whenever implementing anything or fixing errors/bugs inside the backend server (`chestia-backend`), use the `langchain-architecture`, `software-architecture`, and `test-driven-development` skills.
 
 ### 3.3 Design & UX
 
@@ -73,6 +74,7 @@ This document serves as the single source of truth for development rules, archit
 ### 3.5 Documentation Maintenance
 
 - **Rule:** Whenever any modification is made to the project (code changes, new files/directories, or deletions), the `README.md` file **MUST** be updated to reflect these changes.
+- **Skill Usage:** Whenever editing the `README.md` file, use the `crafting-effective-readmes` skill.
 
 ## 4. Workflow Specifics
 

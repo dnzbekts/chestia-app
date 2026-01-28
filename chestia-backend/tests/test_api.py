@@ -63,7 +63,9 @@ def test_generate_endpoint_error_response():
         assert data["status"] == "error"
         assert "extra_ingredients_tried" in data
 
-def test_feedback_endpoint_approval():
+@patch('api.get_db_connection')
+@patch('api.save_recipe')
+def test_feedback_endpoint_approval(mock_save, mock_db):
     client = TestClient(app)
     recipe = {"name": "Approved Recipe", "steps": ["step1"]}
     response = client.post("/feedback", json={
@@ -74,6 +76,7 @@ def test_feedback_endpoint_approval():
     })
     assert response.status_code == 200
     assert response.json()["status"] == "success"
+    assert mock_save.called
 
 def test_generate_endpoint_invalid_input():
     if not app:

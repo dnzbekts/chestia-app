@@ -1,6 +1,7 @@
 import sqlite3
 import os
 import json
+import sqlite_vec
 from typing import List, Dict, Any, Optional
 
 def get_db_connection(db_path=None):
@@ -10,7 +11,18 @@ def get_db_connection(db_path=None):
     
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
+    
+    # Load sqlite-vec extension
+    conn.enable_load_extension(True)
+    sqlite_vec.load(conn)
+    
     return conn
+
+def generate_embedding(text: str) -> List[float]:
+    """Generate embedding vector for text using Gemini"""
+    from langchain_google_genai import GoogleGenerativeAIEmbeddings
+    embeddings = GoogleGenerativeAIEmbeddings(model="models/gemini-embedding-001")
+    return embeddings.embed_query(text)
 
 def init_db(conn):
     cursor = conn.cursor()
@@ -35,6 +47,15 @@ def init_db(conn):
             error_type TEXT,
             message TEXT,
             request_id TEXT
+        )
+    """)
+    
+    # Create vector table for semantic search
+    # Using 3072 dimensions for models/gemini-embedding-001
+    cursor.execute("""
+        CREATE VIRTUAL TABLE IF NOT EXISTS vec_recipes USING vec0(
+            recipe_id INTEGER PRIMARY KEY,
+            embedding float[3072]
         )
     """)
     
@@ -83,3 +104,57 @@ def log_error(conn, error_type: str, message: str, request_id: str = None):
         VALUES (?, ?, ?)
     """, (error_type, message, request_id))
     conn.commit()
+
+def find_recipe_semantically(conn, ingredients: List[str], difficulty: str, threshold: float = 0.5):
+    """
+    Find a recipe using semantic similarity on ingredients + name.
+    """
+    query_text = f"Ingredients: {', '.join(sorted(ingredients))}"
+    query_vector = generate_embedding(query_text)
+    
+    cursor = conn.cursor()
+    # MATCH query for vec0 tables
+    cursor.execute("""
+        SELECT 
+            r.*, 
+            v.distance
+        FROM vec_recipes v
+        JOIN recipes r ON v.recipe_id = r.id
+        WHERE v.embedding MATCH ? AND r.difficulty = ? AND k = 1
+        ORDER BY v.distance
+    """, (sqlite_vec.serialize_float32(query_vector), difficulty))
+    
+    row = cursor.fetchone()
+    # If distance is too high, it might not be a good match
+    if row and row['distance'] < threshold:
+        return dict(row)
+    return None
+
+def save_recipe(conn, name: str, ingredients: List[str], difficulty: str, steps: List[str], metadata: Dict[str, Any] = None):
+    """Save a recipe and its embedding to the database"""
+    cursor = conn.cursor()
+    
+    # 1. Save to relational table
+    cursor.execute("""
+        INSERT INTO recipes (name, ingredients, difficulty, steps, metadata)
+        VALUES (?, ?, ?, ?, ?)
+    """, (
+        name,
+        json.dumps(sorted(ingredients)),
+        difficulty,
+        json.dumps(steps),
+        json.dumps(metadata or {})
+    ))
+    recipe_id = cursor.lastrowid
+    
+    # 2. Generate and save embedding
+    embedding_text = f"Ingredients: {', '.join(sorted(ingredients))}"
+    embedding = generate_embedding(embedding_text)
+    
+    cursor.execute("""
+        INSERT INTO vec_recipes (recipe_id, embedding)
+        VALUES (?, ?)
+    """, (recipe_id, sqlite_vec.serialize_float32(embedding)))
+    
+    conn.commit()
+    return recipe_id

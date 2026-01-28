@@ -152,3 +152,41 @@ def test_find_recipe_default_ingredients_not_differentiating():
     assert found2["name"] == "Simple Pasta"
     
     conn.close()
+
+def test_find_recipe_semantically():
+    """Test finding a recipe fuzzy matching ingredients (TDD GREEN)"""
+    from database import find_recipe_semantically, save_recipe
+    from unittest.mock import patch
+    
+    conn = get_db_connection(DB_PATH)
+    init_db(conn)
+    
+    # Mock embedding generation to return fixed vectors
+    # We'll assume "penne, tomato, chili" -> [0.1, 0.2, ...]
+    # And "fusilli, tomato sauce" -> [0.11, 0.21, ...]
+    
+    with patch("database.generate_embedding") as mock_embed:
+        # Vector for stored recipe
+        stored_vector = [0.1] * 768
+        # Vector for query
+        query_vector = [0.11] * 768
+        
+        mock_embed.side_effect = [stored_vector, query_vector]
+        
+        # Save a recipe using the utility
+        save_recipe(
+            conn, 
+            name="Penne Arrabbiata", 
+            ingredients=["penne", "tomato", "chili"], 
+            difficulty="easy", 
+            steps=[]
+        )
+        
+        # Search for it semantically
+        found = find_recipe_semantically(conn, ["fusilli", "tomato sauce"], "easy")
+        
+        assert found is not None
+        assert found["name"] == "Penne Arrabbiata"
+        assert found["distance"] < 0.3 # Close enough in our mock
+    
+    conn.close()

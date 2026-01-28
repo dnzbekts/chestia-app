@@ -10,3 +10,5 @@ copilotkit
 httpx-sse
 tavily-python
 langchain-community
+sqlite-vec
+langchain-tavily

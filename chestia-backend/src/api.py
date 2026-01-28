@@ -4,7 +4,7 @@ from typing import List, Dict, Any, Optional, Literal
 import json
 import re
 from graph import create_graph
-from database import get_db_connection, init_db, log_error
+from database import get_db_connection, init_db, log_error, save_recipe
 from config import filter_default_ingredients, COPILOTKIT_AGENT_NAME, COPILOTKIT_AGENT_DESCRIPTION
 from utils import i18n
 
@@ -112,6 +112,19 @@ def generate_recipe(request: GenerateRequest):
             "error": None,
             "iteration_count": 0
         })
+
+        if result and result.get("recipe"):
+            conn = get_db_connection()
+            init_db(conn)
+            save_recipe(
+                conn,
+                name=result["recipe"]["name"],
+                ingredients=filtered_ingredients,
+                difficulty=request.difficulty,
+                steps=result["recipe"]["steps"],
+                metadata=result["recipe"].get("metadata", {})
+            )
+            conn.close()
         
         # Step 4: Handle result - no more needs_approval flow
         if result.get("error"):
@@ -185,6 +198,18 @@ def modify_recipe(request: ModifyRequest):
             "error": None,
             "iteration_count": 0
         })
+        if result and result.get("recipe"):
+            conn = get_db_connection()
+            init_db(conn)
+            save_recipe(
+                conn,
+                name=result["recipe"]["name"],
+                ingredients=filtered_ingredients,
+                difficulty=request.difficulty,
+                steps=result["recipe"]["steps"],
+                metadata=result["recipe"].get("metadata", {})
+            )
+            conn.close()
         
         if result.get("error"):
             conn = get_db_connection()
@@ -230,18 +255,15 @@ def handle_feedback(request: FeedbackRequest):
         # Filter default ingredients before caching
         non_default_ingredients = filter_default_ingredients(request.ingredients)
         
-        cursor = conn.cursor()
-        cursor.execute("""
-            INSERT INTO recipes (name, ingredients, difficulty, steps, metadata)
-            VALUES (?, ?, ?, ?, ?)
-        """, (
-            request.recipe["name"], 
-            json.dumps(sorted(non_default_ingredients)),
-            request.difficulty,
-            json.dumps(request.recipe["steps"]), 
-            json.dumps(request.recipe.get("metadata", {}))
-        ))
-        conn.commit()
+        save_recipe(
+            conn,
+            name=request.recipe["name"],
+            ingredients=non_default_ingredients,
+            difficulty=request.difficulty,
+            steps=request.recipe["steps"],
+            metadata=request.recipe.get("metadata", {})
+        )
+        
         return {
             "status": "success", 
             "recipe": request.recipe,

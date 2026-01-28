@@ -3,7 +3,7 @@ from langgraph.graph import StateGraph, START, END
 from agents.recipe_agent import RecipeAgent
 from agents.review_agent import ReviewAgent
 from agents.search_agent import SearchAgent
-from database import get_db_connection, find_recipe_by_ingredients
+from database import get_db_connection, find_recipe_by_ingredients, find_recipe_semantically
 from utils import i18n
 
 class GraphState(TypedDict):
@@ -29,6 +29,31 @@ def search_cache_node(state: GraphState):
         )
         if recipe:
             return {"recipe": recipe, "iteration_count": state.get("iteration_count", 0) + 1}
+    finally:
+        conn.close()
+    return {"iteration_count": state.get("iteration_count", 0) + 1}
+
+
+def semantic_search_node(state: GraphState):
+    """
+    Check if a similar recipe exists using semantic embeddings.
+    Fills the gap between exact cache and web search.
+    """
+    conn = get_db_connection()
+    try:
+        recipe = find_recipe_semantically(
+            conn,
+            state["ingredients"],
+            state["difficulty"]
+        )
+        if recipe:
+            return {
+                "recipe": recipe,
+                "iteration_count": state.get("iteration_count", 0) + 1
+            }
+    except Exception:
+        # Silently fail and fallback to web search
+        pass
     finally:
         conn.close()
     return {"iteration_count": state.get("iteration_count", 0) + 1}
@@ -166,7 +191,14 @@ def route_after_cache(state: GraphState):
     """Route after cache check"""
     if state.get("recipe"):
         return "review_recipe" # Cache hit -> Review
-    return "web_search"     # Cache miss -> Web Search
+    return "semantic_search"     # Cache miss -> Semantic Search
+
+
+def route_after_semantic(state: GraphState):
+    """Route after semantic search"""
+    if state.get("recipe"):
+        return "review_recipe" # Semantic hit -> Review
+    return "web_search"        # Semantic miss -> Web Search
 
 
 def route_after_search(state: GraphState):
@@ -180,6 +212,7 @@ def create_graph():
     workflow = StateGraph(GraphState)
     
     workflow.add_node("search_cache", search_cache_node)
+    workflow.add_node("semantic_search", semantic_search_node)
     workflow.add_node("web_search", web_search_node)
     workflow.add_node("generate_recipe", generate_recipe_node)
     workflow.add_node("review_recipe", review_recipe_node)
@@ -189,6 +222,15 @@ def create_graph():
     workflow.add_conditional_edges(
         "search_cache",
         route_after_cache,
+        {
+            "review_recipe": "review_recipe",
+            "semantic_search": "semantic_search"
+        }
+    )
+    
+    workflow.add_conditional_edges(
+        "semantic_search",
+        route_after_semantic,
         {
             "review_recipe": "review_recipe",
             "web_search": "web_search"
