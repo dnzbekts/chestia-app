@@ -6,6 +6,7 @@
 
 ## ✨ Features
 
+- **Smart Web Search**: Integrates Tavily AI to find real-world recipes before attempting LLM generation
 - **AI-Powered Recipe Generation**: Leverages Google Gemini (1.5 Flash) to craft recipes based on what you have in your fridge
 - **Difficulty-Based Recipes**: Choose Easy, Intermediate, or Hard to get recipes that match your cooking skills
 - **Smart Default Ingredients**: Automatically assumes basic pantry staples (water, oil, salt, spices) are available
@@ -27,7 +28,7 @@ graph TD
     User([User: ingredients + difficulty]) --> Filter[Filter Default Ingredients]
     Filter --> Cache{SQLite Cache}
     Cache -- Hit --> Result([Return Recipe])
-    Cache -- Miss --> Search{Web Search (Tavily)}
+    Cache -- Miss --> Search{"Web Search (Tavily)"}
     
     Search -- Found --> Review{Valid Recipe?}
     Search -- Miss --> Generate[Generate Recipe]
@@ -52,13 +53,18 @@ The backend orchestrates two specialized AI agents using LangGraph:
    - Enforces strict ingredient constraints
    - Adjusts complexity based on difficulty level
 
-2. **ReviewAgent** (`review_agent.py`)
+2. **SearchAgent** (`search_agent.py`)
+   - Performs web searches using Tavily AI
+   - Finds existing recipes to avoid unnecessary generation
+   - Extracts relevant cooking information for the RecipeAgent
+
+3. **ReviewAgent** (`review_agent.py`)
    - Validates recipes using Google Gemini 1.5 Flash (temperature: 0)
    - Checks for hallucinations and logical errors
    - Verifies difficulty appropriateness
    - Suggests additional ingredients if needed
 
-3. **Orchestration** (`graph.py`)
+4. **Orchestration** (`graph.py`)
    - Coordinates agent interactions via LangGraph
    - Manages auto-retry flow (max 3 iterations)
    - Handles state and error propagation
@@ -97,7 +103,8 @@ The backend orchestrates two specialized AI agents using LangGraph:
 │   ├── src/
 │   │   ├── agents/               # AI Agents
 │   │   │   ├── recipe_agent.py   # Recipe generation agent
-│   │   │   └── review_agent.py   # Validation & review agent
+│   │   │   ├── review_agent.py   # Validation & review agent
+│   │   │   └── search_agent.py   # Web search agent
 │   │   ├── utils/
 │   │   │   └── i18n.py           # Bilingual message utility
 │   │   ├── api.py                # FastAPI endpoints
@@ -157,6 +164,7 @@ The backend orchestrates two specialized AI agents using LangGraph:
 
    ```env
    GOOGLE_API_KEY=your_gemini_api_key_here
+   TAVILY_API_KEY=your_tavily_api_key_here
    ```
 
 5. **Run the development server:**
