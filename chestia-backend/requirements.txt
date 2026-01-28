@@ -8,3 +8,5 @@ fastapi
 uvicorn
 copilotkit
 httpx-sse
+tavily-python
+langchain-community

@@ -13,7 +13,13 @@ The primary method for frontend-backend communication is via the CopilotKit SDK 
 
 ### Agent Configuration
 - **Agent Name**: `chestia_recipe_agent`
-- **Description**: "Intelligent recipe generation from user-provided ingredients with auto-retry and validation"
+- **Description**: "Intelligent recipe generation using strict ingredient constraints. Prioritizes local cache, then Tavily web search, and falls back to Gemini AI generation with auto-retry and validation."
+
+### 🧠 Recipe Resolution Strategy
+The backend employs a 3-tier strategy to find the best recipe:
+1.  **Cache Hit**: Checks SQLite database for existing valid recipes.
+2.  **Web Search (Tavily)**: If cache miss, searches the web for a matching recipe using *only* the provided ingredients.
+3.  **GenAI Fallback**: If web search fails, generates a new recipe using Google Gemini with strict ingredient adherence.
 
 ### State Schema (`CopilotKitState`)
 

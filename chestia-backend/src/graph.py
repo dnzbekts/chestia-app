@@ -2,6 +2,7 @@ from typing import TypedDict, List, Dict, Any, Optional
 from langgraph.graph import StateGraph, START, END
 from agents.recipe_agent import RecipeAgent
 from agents.review_agent import ReviewAgent
+from agents.search_agent import SearchAgent
 from database import get_db_connection, find_recipe_by_ingredients
 from utils import i18n
 
@@ -30,6 +31,31 @@ def search_cache_node(state: GraphState):
             return {"recipe": recipe, "iteration_count": state.get("iteration_count", 0) + 1}
     finally:
         conn.close()
+    return {"iteration_count": state.get("iteration_count", 0) + 1}
+
+
+def web_search_node(state: GraphState):
+    """
+    Search for recipe on web if cache miss.
+    
+    If successful, returns recipe and skips generation.
+    If fails/empty, proceeds to generation with no recipe.
+    """
+    try:
+        agent = SearchAgent()
+        recipe = agent.search(
+            state["ingredients"],
+            state["difficulty"]
+        )
+        if recipe:
+            return {
+                "recipe": recipe, 
+                "iteration_count": state.get("iteration_count", 0) + 1
+            }
+    except Exception:
+        # Fallback to generation on any error
+        pass
+        
     return {"iteration_count": state.get("iteration_count", 0) + 1}
 
 
@@ -119,13 +145,6 @@ def review_recipe_node(state: GraphState):
     }
 
 
-def should_generate(state: GraphState):
-    """Condition after cache check"""
-    if state.get("recipe"):
-        return "review"
-    return "generate"
-
-
 def route_after_review(state: GraphState):
     """Route based on review outcome"""
     # If there's an error, we're done
@@ -143,10 +162,25 @@ def route_after_review(state: GraphState):
     return END
 
 
+def route_after_cache(state: GraphState):
+    """Route after cache check"""
+    if state.get("recipe"):
+        return "review_recipe" # Cache hit -> Review
+    return "web_search"     # Cache miss -> Web Search
+
+
+def route_after_search(state: GraphState):
+    """Route after web search"""
+    if state.get("recipe"):
+        return "review_recipe" # Search hit -> Review
+    return "generate_recipe" # Search miss -> Generate
+
+
 def create_graph():
     workflow = StateGraph(GraphState)
     
     workflow.add_node("search_cache", search_cache_node)
+    workflow.add_node("web_search", web_search_node)
     workflow.add_node("generate_recipe", generate_recipe_node)
     workflow.add_node("review_recipe", review_recipe_node)
     
@@ -154,10 +188,19 @@ def create_graph():
     
     workflow.add_conditional_edges(
         "search_cache",
-        should_generate,
+        route_after_cache,
         {
-            "generate": "generate_recipe",
-            "review": "review_recipe"
+            "review_recipe": "review_recipe",
+            "web_search": "web_search"
+        }
+    )
+    
+    workflow.add_conditional_edges(
+        "web_search",
+        route_after_search,
+        {
+            "review_recipe": "review_recipe",
+            "generate_recipe": "generate_recipe"
         }
     )
     

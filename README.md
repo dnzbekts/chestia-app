@@ -27,9 +27,12 @@ graph TD
     User([User: ingredients + difficulty]) --> Filter[Filter Default Ingredients]
     Filter --> Cache{SQLite Cache}
     Cache -- Hit --> Result([Return Recipe])
-    Cache -- Miss --> Generate[Generate Recipe]
+    Cache -- Miss --> Search{Web Search (Tavily)}
     
-    Generate --> Review{Valid Recipe?}
+    Search -- Found --> Review{Valid Recipe?}
+    Search -- Miss --> Generate[Generate Recipe]
+    
+    Generate --> Review
     Review -- Yes --> Result
     Review -- No, iter<3 --> AddExtras[Add 1-2 Extras]
     AddExtras --> Generate
@@ -65,18 +68,20 @@ The backend orchestrates two specialized AI agents using LangGraph:
 ## 🛠️ Tech Stack
 
 ### Backend
+
 - **Language**: Python 3.14
 - **Orchestration**: LangGraph + CrewAI
 - **LLM**: Google Gemini 1.5 Flash (via `langchain-google-genai`)
 - **API Framework**: FastAPI + Uvicorn
 - **Database**: SQLite
 - **Testing**: pytest (8 test suites, including integration tests)
-- **Utilities**: 
+- **Utilities**:
   - `config.py`: Default ingredient filtering
   - `database.py`: SQLite operations & caching
   - `utils/i18n.py`: Bilingual message management
 
 ### Frontend
+
 - **Framework**: Next.js 16 (App Router)
 - **Styling**: Tailwind CSS v4 + Lucide React
 - **Passive Bridge**: CopilotKit (planned integration)
@@ -129,34 +134,41 @@ The backend orchestrates two specialized AI agents using LangGraph:
 ### Backend Setup
 
 1. **Navigate to the backend directory:**
+
    ```bash
    cd chestia-backend
    ```
 
 2. **Create and activate a virtual environment:**
+
    ```bash
    python -m venv venv
    source venv/bin/activate  # On Windows: venv\Scripts\activate
    ```
 
 3. **Install dependencies:**
+
    ```bash
    pip install -r requirements.txt
    ```
 
 4. **Configure environment variables:**
    Create a `.env` file in the `chestia-backend` directory:
+
    ```env
    GOOGLE_API_KEY=your_gemini_api_key_here
    ```
 
 5. **Run the development server:**
+
    ```bash
    uvicorn src.api:app --reload
    ```
+
    The API will be available at `http://localhost:8000`
 
 6. **Run tests (optional):**
+
    ```bash
    pytest tests/ -v
    ```
@@ -164,19 +176,23 @@ The backend orchestrates two specialized AI agents using LangGraph:
 ### Frontend Setup
 
 1. **Navigate to the web directory:**
+
    ```bash
    cd chestia-web
    ```
 
 2. **Install dependencies:**
+
    ```bash
    npm install
    ```
 
 3. **Run the development server:**
+
    ```bash
    npm run dev
    ```
+
    The app will be available at `http://localhost:3000`
 
 ---
@@ -184,9 +200,11 @@ The backend orchestrates two specialized AI agents using LangGraph:
 ## 📡 API Endpoints
 
 ### Generate Recipe
+
 `POST /generate`
 
 **Request:**
+
 ```json
 {
   "ingredients": ["chicken", "rice", "onion"],
@@ -196,6 +214,7 @@ The backend orchestrates two specialized AI agents using LangGraph:
 ```
 
 **Response (Success):**
+
 ```json
 {
   "status": "success",
@@ -211,6 +230,7 @@ The backend orchestrates two specialized AI agents using LangGraph:
 ```
 
 **Response (Error):**
+
 ```json
 {
   "status": "error",
@@ -220,9 +240,11 @@ The backend orchestrates two specialized AI agents using LangGraph:
 ```
 
 ### Modify Recipe
+
 `POST /modify`
 
 **Request:**
+
 ```json
 {
   "original_ingredients": ["chicken", "rice"],
@@ -234,9 +256,11 @@ The backend orchestrates two specialized AI agents using LangGraph:
 ```
 
 ### Submit Feedback
+
 `POST /feedback`
 
 **Request:**
+
 ```json
 {
   "ingredients": ["chicken", "rice"],
@@ -261,12 +285,14 @@ The backend includes comprehensive test coverage:
 - **Configuration Tests** (`test_config.py`): Default ingredient filtering
 
 Run all tests:
+
 ```bash
 cd chestia-backend
 pytest tests/ -v
 ```
 
 Run specific test suite:
+
 ```bash
 pytest tests/test_integration.py -v
 ```

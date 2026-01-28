@@ -15,6 +15,7 @@ from langchain_core.messages import BaseMessage, HumanMessage, AIMessage
 
 from agents.recipe_agent import RecipeAgent
 from agents.review_agent import ReviewAgent
+from agents.search_agent import SearchAgent
 import config
 import database
 
@@ -73,6 +74,31 @@ def search_cache_node(state: CopilotKitState) -> Dict[str, Any]:
     return {
         "iteration_count": state.get("iteration_count", 0) + 1,
         "messages": [AIMessage(content="No cached recipe found. Generating new recipe...")]
+    }
+
+
+def web_search_node(state: CopilotKitState) -> Dict[str, Any]:
+    """
+    Search for recipe on web if cache miss.
+    """
+    try:
+        agent = SearchAgent()
+        recipe = agent.search(
+            state["ingredients"],
+            state["difficulty"]
+        )
+        if recipe:
+            return {
+                "recipe": recipe,
+                "iteration_count": state.get("iteration_count", 0) + 1,
+                "messages": [AIMessage(content=f"Found recipe via web search: {recipe.get('name', 'Search Result')}")]
+            }
+    except Exception:
+        pass
+        
+    return {
+        "iteration_count": state.get("iteration_count", 0) + 1,
+        "messages": [AIMessage(content="Web search yielded no results. Generating new recipe...")]
     }
 
 
@@ -190,6 +216,19 @@ def should_continue(state: CopilotKitState) -> str:
     return "generate"
 
 
+def route_after_cache(state: CopilotKitState) -> str:
+    if state.get("recipe"):
+        return "end" # Cache hit -> End (skip everything)
+    return "web_search"
+
+
+def route_after_search(state: CopilotKitState) -> str:
+    if state.get("recipe"):
+        return "review"
+    return "generate"
+
+
+
 def create_copilotkit_graph() -> StateGraph:
     """
     Create the CopilotKit-compatible LangGraph workflow.
@@ -213,6 +252,7 @@ def create_copilotkit_graph() -> StateGraph:
     
     # Add nodes
     workflow.add_node("search_cache", search_cache_node)
+    workflow.add_node("web_search", web_search_node)
     workflow.add_node("generate_recipe", generate_recipe_node)
     workflow.add_node("review_recipe", review_recipe_node)
     
@@ -220,9 +260,17 @@ def create_copilotkit_graph() -> StateGraph:
     workflow.add_edge(START, "search_cache")
     workflow.add_conditional_edges(
         "search_cache",
-        should_continue,
+        route_after_cache,
         {
             "end": END,
+            "web_search": "web_search"
+        }
+    )
+    workflow.add_conditional_edges(
+        "web_search",
+        route_after_search,
+        {
+            "review": "review_recipe",
             "generate": "generate_recipe"
         }
     )
