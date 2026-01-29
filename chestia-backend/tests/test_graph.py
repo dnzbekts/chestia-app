@@ -4,9 +4,9 @@ import os
 from unittest.mock import MagicMock, patch
 
 # Add src to path
-sys.path.append(os.path.join(os.path.dirname(__file__), '../src'))
+sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
-from graph import create_graph, GraphState
+from src.workflow.graph import create_graph, GraphState
 
 @pytest.mark.asyncio
 def test_graph_initialization():

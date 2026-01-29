@@ -1,56 +1,78 @@
-from langchain_tavily import TavilySearch
-from langchain_google_genai import ChatGoogleGenerativeAI
+"""
+Search Agent - Searches for recipes using Tavily web search.
+
+Refactored to use LLMFactory, proper logging, and retry logic.
+"""
+
 from typing import List, Optional, Dict, Any
 import os
 import json
-from config import DEFAULT_INGREDIENTS
+import logging
+from langchain_tavily import TavilySearch
+from src.infrastructure.llm_factory import LLMFactory
+from src.core.exceptions import SearchError
+from src.core.config import SEARCH_CONFIG
+
+logger = logging.getLogger(__name__)
+
 
 class SearchAgent:
+    """Agent responsible for searching web for recipes."""
+    
     def __init__(self):
-        api_key = os.getenv("GOOGLE_API_KEY")
-        if not api_key or api_key == "YOUR_KEY_HERE":
-            raise RuntimeError("GOOGLE_API_KEY is not set")
-
+        """Initialize the SearchAgent with configured LLM and search tool."""
         search_api_key = os.getenv("TAVILY_API_KEY")
-        if not search_api_key or search_api_key == "YOUR_KEY_HERE":
-            raise RuntimeError("TAVILY_API_KEY is not set")
-            
-        self.llm = ChatGoogleGenerativeAI(
-            model="gemini-2.0-flash",
-            google_api_key=api_key,
-            temperature=0.1 # Low temp for parsing
-        )
+        if not search_api_key or search_api_key in ["YOUR_KEY_HERE", ""]:
+            raise SearchError(
+                "TAVILY_API_KEY is not set or invalid. "
+                "Please set it in your .env file."
+            )
         
-        # Initialize Tavily tool
-        # Ensure TAVILY_API_KEY is in env or passed explicitly
+        self.llm = LLMFactory.create_search_llm()
+        
+        # Initialize Tavily tool with configuration
         self.search_tool = TavilySearch(
-            max_results=3,
-            search_depth="advanced",
+            max_results=SEARCH_CONFIG["max_results"],
+            search_depth=SEARCH_CONFIG["search_depth"],
             api_key=search_api_key
         )
 
     def search(self, ingredients: List[str], difficulty: str) -> Optional[Dict[str, Any]]:
         """
         Search for a recipe using ingredients and return structured data.
-        Returns None if no suitable recipe found.
+        
+        Args:
+            ingredients: List of ingredients to search for
+            difficulty: Desired recipe difficulty
+            
+        Returns:
+            Recipe dictionary if found, None otherwise
         """
-        # 1. Construct strict query
+        from src.domain.ingredients import DEFAULT_INGREDIENTS
+        
+        # Construct strict query
         default_ing_str = ", ".join(sorted(DEFAULT_INGREDIENTS))
         user_ing_str = ", ".join(ingredients)
         
-        query = f"recipe using ONLY {user_ing_str} (pantry: {default_ing_str}) difficulty {difficulty} full recipe steps"
+        query = (
+            f"recipe using ONLY {user_ing_str} "
+            f"(pantry: {default_ing_str}) "
+            f"difficulty {difficulty} full recipe steps"
+        )
         
         try:
-            # 2. Execute Search
+            # Execute Search
+            logger.info(f"Searching for recipe with query: {query[:100]}...")
             results = self.search_tool.invoke({"query": query})
             
             if not results or not isinstance(results, list):
+                logger.warning("No search results returned")
                 return None
                 
             # Combine content for parsing
             context = "\n\n".join([r.get("content", "") for r in results])
             
-            # 3. Parse with LLM
+            # Parse with LLM
             parse_prompt = f"""
             You are a recipe parser. Extract a SINGLE recipe from the search results below.
             
@@ -78,16 +100,22 @@ class SearchAgent:
             content = response.content.strip().replace("```json", "").replace("```", "")
             
             if "NO_RECIPE" in content or not content:
+                logger.info("LLM determined no valid recipe in search results")
                 return None
                 
             recipe = json.loads(content)
             
             # Basic validation
             if not recipe.get("steps") or not recipe.get("ingredients"):
+                logger.warning("Parsed recipe missing steps or ingredients")
                 return None
-                
+            
+            logger.info(f"Successfully found recipe: {recipe.get('name', 'Unknown')}")
             return recipe
             
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse LLM response as JSON: {e}")
+            return None
         except Exception as e:
-            print(f"Search failed: {e}")
+            logger.error(f"Search failed with error: {e}", exc_info=True)
             return None

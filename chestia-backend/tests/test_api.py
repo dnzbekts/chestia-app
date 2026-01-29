@@ -3,12 +3,12 @@ import sys
 import os
 from unittest.mock import patch, MagicMock
 
-sys.path.append(os.path.join(os.path.dirname(__file__), '../src'))
+sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
 # We need to import app, but it doesn't exist yet, so this will fail import
 # This is expected for TDD
 try:
-    from api import app
+    from src.main import app
 except ImportError:
     app = None
 
@@ -18,11 +18,11 @@ except ImportError:
 
 def test_generate_endpoint_success():
     if not app:
-        assert False, "api module not found"
+        assert False, "main module not found"
         
     client = TestClient(app)
     
-    with patch('api.graph') as mock_graph:
+    with patch('src.api.routes.graph') as mock_graph:
         # Mock return value of graph.invoke
         mock_graph.invoke.return_value = {
             "recipe": {
@@ -48,7 +48,7 @@ def test_generate_endpoint_success():
 def test_generate_endpoint_error_response():
     """Test that error responses include extra ingredients tried"""
     client = TestClient(app)
-    with patch('api.graph') as mock_graph:
+    with patch('src.api.routes.graph') as mock_graph:
         mock_graph.invoke.return_value = {
             "recipe": None,
             "error": "İlettiğiniz malzemelerle uygun bir tarif bulunamadı",
@@ -63,8 +63,8 @@ def test_generate_endpoint_error_response():
         assert data["status"] == "error"
         assert "extra_ingredients_tried" in data
 
-@patch('api.get_db_connection')
-@patch('api.save_recipe')
+@patch('src.api.routes.get_db_connection')
+@patch('src.api.routes.save_recipe')
 def test_feedback_endpoint_approval(mock_save, mock_db):
     client = TestClient(app)
     recipe = {"name": "Approved Recipe", "steps": ["step1"]}
@@ -94,7 +94,7 @@ def test_generate_endpoint_malicious_input():
 
 def test_generate_endpoint_error_masking():
     client = TestClient(app)
-    with patch('api.graph') as mock_graph:
+    with patch('src.api.routes.graph') as mock_graph:
         # Simulate a crash/error in the graph
         mock_graph.invoke.side_effect = Exception("Internal SQL Error detail that should be hidden")
         

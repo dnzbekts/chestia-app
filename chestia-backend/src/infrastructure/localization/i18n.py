@@ -8,6 +8,13 @@ INTERNAL_SERVER_ERROR = "internal_server_error"
 FEEDBACK_SUCCESS = "feedback_success"
 FEEDBACK_REJECTED = "feedback_rejected"
 FEEDBACK_SAVE_FAILED = "feedback_save_failed"
+SEARCHING_CACHE = "searching_cache"
+RECIPE_VALIDATED = "recipe_validated"
+GENERATING_RECIPE = "generating_recipe"
+SEMANTIC_SEARCH_HIT = "semantic_search_hit"
+SEMANTIC_SEARCH_MISS = "semantic_search_miss"
+WEB_SEARCH_HIT = "web_search_hit"
+WEB_SEARCH_MISS = "web_search_miss"
 
 MESSAGES: Dict[str, Dict[str, str]] = {
     MIN_INGREDIENTS: {
@@ -37,6 +44,34 @@ MESSAGES: Dict[str, Dict[str, str]] = {
     FEEDBACK_SAVE_FAILED: {
         "en": "Failed to save your feedback",
         "tr": "Geri bildiriminiz kaydedilemedi"
+    },
+    SEARCHING_CACHE: {
+        "en": "Checking if we have a similar recipe in our cookbook...",
+        "tr": "Kitabımızda benzer bir tarif olup olmadığını kontrol ediyorum..."
+    },
+    RECIPE_VALIDATED: {
+        "en": "Recipe looks delicious and follows all rules!",
+        "tr": "Tarif harika görünüyor ve tüm kurallara uygun!"
+    },
+    GENERATING_RECIPE: {
+        "en": "Creating a new recipe just for you...",
+        "tr": "Sizin için yeni bir tarif oluşturuyorum..."
+    },
+    SEMANTIC_SEARCH_HIT: {
+        "en": "Found a very similar recipe in our collection!",
+        "tr": "Koleksiyonumuzda çok benzer bir tarif buldum!"
+    },
+    SEMANTIC_SEARCH_MISS: {
+        "en": "No similar recipes found locally, searching broader...",
+        "tr": "Benzer tarif bulunamadı, daha geniş kapsamlı arıyorum..."
+    },
+    WEB_SEARCH_HIT: {
+        "en": "Found a great recipe from our web search!",
+        "tr": "Web aramamızda harika bir tarif buldum!"
+    },
+    WEB_SEARCH_MISS: {
+        "en": "No recipes found online, I will create one from scratch.",
+        "tr": "Çevrimiçi tarif bulunamadı, sıfırdan bir tane oluşturacağım."
     }
 }
 

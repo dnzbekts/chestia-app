@@ -4,6 +4,8 @@ langchain-google-genai
 pydantic
 python-dotenv
 pytest
+pytest-asyncio
+pytest-cov
 fastapi
 uvicorn
 copilotkit
@@ -12,3 +14,4 @@ tavily-python
 langchain-community
 sqlite-vec
 langchain-tavily
+faker

@@ -5,26 +5,26 @@ import os
 from unittest.mock import patch, MagicMock
 
 # Add src to sys.path
-sys.path.append(os.path.join(os.path.dirname(__file__), '../src'))
+sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
-from api import app
-from utils import i18n
+from src.main import app
+from src.infrastructure.localization import i18n
 
 client = TestClient(app)
 
 @pytest.fixture
 def mock_db_connection():
-    with patch('api.get_db_connection') as mock_conn:
+    with patch('src.api.routes.get_db_connection') as mock_conn:
         yield mock_conn
 
 @pytest.fixture
 def mock_graph_invoke():
-    with patch('api.graph.invoke') as mock_invoke:
+    with patch('src.api.routes.graph.invoke') as mock_invoke:
         yield mock_invoke
 
 def test_generate_cache_hit(mock_db_connection):
     """Scenario 2.1: Verify cache hit returns recipe instantly."""
-    with patch('api.graph.invoke') as mock_invoke:
+    with patch('src.api.routes.graph.invoke') as mock_invoke:
         mock_recipe = {
             "name": "Cached Pasta",
             "ingredients": ["pasta", "tomato"],
@@ -50,7 +50,7 @@ def test_generate_cache_hit(mock_db_connection):
 
 def test_generate_llm_success_tr():
     """Scenario 2.2: Verify successful generation with Turkish language."""
-    with patch('api.graph.invoke') as mock_invoke:
+    with patch('src.api.routes.graph.invoke') as mock_invoke:
         mock_recipe = {
             "name": "Domatesli Makarna",
             "ingredients": ["makarna", "domates"],
@@ -77,7 +77,7 @@ def test_generate_llm_success_tr():
 
 def test_generate_auto_retry_success():
     """Scenario 2.3: Verify auto-retry loop when extra ingredients are needed."""
-    with patch('api.graph.invoke') as mock_invoke:
+    with patch('src.api.routes.graph.invoke') as mock_invoke:
         mock_recipe = {
             "name": "Retried Recipe",
             "ingredients": ["egg", "milk"],
@@ -108,7 +108,7 @@ def test_generate_auto_retry_success():
 
 def test_generate_failure_max_iterations_en():
     """Scenario 2.4: Verify English error after max iterations fail."""
-    with patch('api.graph.invoke') as mock_invoke:
+    with patch('src.api.routes.graph.invoke') as mock_invoke:
         expected_error = i18n.get_message(i18n.RECIPE_NOT_FOUND, "en")
         mock_invoke.return_value = {
             "recipe": None,
@@ -143,8 +143,13 @@ def test_validation_failure_default_only_tr():
 
 def test_modify_recipe_success():
     """Scenario 2.6: Verify modification flow."""
-    with patch('api.graph.invoke') as mock_invoke:
-        mock_recipe = {"name": "Modified Pasta", "ingredients": ["pasta", "cream", "cheese"]}
+    with patch('src.api.routes.graph.invoke') as mock_invoke:
+        mock_recipe = {
+            "name": "Modified Pasta", 
+            "ingredients": ["pasta", "cream", "cheese"],
+            "steps": ["Boil pasta", "Add cream", "Mix cheese"],
+            "metadata": {"difficulty": "hard"}
+        }
         mock_invoke.return_value = {
             "recipe": mock_recipe,
             "extra_ingredients": [],
@@ -167,12 +172,15 @@ def test_modify_recipe_success():
 def test_feedback_success_en():
     """Scenario 2.7: Verify feedback successfully saves."""
     # We need to mock generate_embedding because save_recipe calls it
-    with patch('database.generate_embedding') as mock_embed:
+    with patch('src.infrastructure.database.EmbeddingService.generate_embedding') as mock_embed:
         mock_embed.return_value = [0.1] * 768
         
-        with patch('api.get_db_connection') as mock_conn:
+        with patch('src.api.routes.get_db_connection') as mock_get_conn:
+            # mock_get_conn() returns a context manager
+            mock_conn = MagicMock()
+            mock_get_conn.return_value.__enter__.return_value = mock_conn
             mock_cursor = MagicMock()
-            mock_conn.return_value.cursor.return_value = mock_cursor
+            mock_conn.cursor.return_value = mock_cursor
             
             response = client.post("/feedback", json={
                 "ingredients": ["pasta", "tomato", "cheese"],

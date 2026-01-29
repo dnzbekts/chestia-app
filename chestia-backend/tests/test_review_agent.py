@@ -3,18 +3,17 @@ import sys
 import os
 from unittest.mock import MagicMock, patch
 
-sys.path.append(os.path.join(os.path.dirname(__file__), '../src'))
+sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
-from agents.review_agent import ReviewAgent
+from src.workflow.agents.review_agent import ReviewAgent
 
-@patch.dict(os.environ, {"GOOGLE_API_KEY": "test-api-key"})
+@patch.dict(os.environ, {"GOOGLE_API_KEY": "AIzaSyDummyKeyForTestingOnly"})
 def test_review_agent_initialization():
     agent = ReviewAgent()
     assert agent is not None
 
-@patch.dict(os.environ, {"GOOGLE_API_KEY": "test-api-key"})
-
-@patch('agents.review_agent.ChatGoogleGenerativeAI')
+@patch.dict(os.environ, {"GOOGLE_API_KEY": "AIzaSyDummyKeyForTestingOnly"})
+@patch('src.infrastructure.llm_factory.ChatGoogleGenerativeAI')
 def test_validate_recipe_success(mock_llm):
     """Test successful validation"""
     mock_response = MagicMock()
@@ -35,8 +34,8 @@ def test_validate_recipe_success(mock_llm):
     result = agent.validate(recipe, ingredients, "easy")
     assert result["valid"] is True
 
-@patch.dict(os.environ, {"GOOGLE_API_KEY": "test-api-key"})
-@patch('agents.review_agent.ChatGoogleGenerativeAI')
+@patch.dict(os.environ, {"GOOGLE_API_KEY": "AIzaSyDummyKeyForTestingOnly"})
+@patch('src.infrastructure.llm_factory.ChatGoogleGenerativeAI')
 def test_validate_recipe_hallucination(mock_llm):
     """Test catching a hallucination (missing ingredients or illogical steps)"""
     mock_response = MagicMock()
@@ -58,8 +57,8 @@ def test_validate_recipe_hallucination(mock_llm):
     assert result["valid"] is False
     assert "ingredients" in result["reasoning"].lower()
 
-@patch.dict(os.environ, {"GOOGLE_API_KEY": "test-api-key"})
-@patch('agents.review_agent.ChatGoogleGenerativeAI')
+@patch.dict(os.environ, {"GOOGLE_API_KEY": "AIzaSyDummyKeyForTestingOnly"})
+@patch('src.infrastructure.llm_factory.ChatGoogleGenerativeAI')
 def test_validate_recipe_with_default_ingredients_allowed(mock_llm):
     """Test that recipes using default ingredients are marked as valid"""
     mock_response = MagicMock()
@@ -81,8 +80,8 @@ def test_validate_recipe_with_default_ingredients_allowed(mock_llm):
     assert result["valid"] is True
     assert "default" in result["reasoning"].lower()
 
-@patch.dict(os.environ, {"GOOGLE_API_KEY": "test-api-key"})
-@patch('agents.review_agent.ChatGoogleGenerativeAI')
+@patch.dict(os.environ, {"GOOGLE_API_KEY": "AIzaSyDummyKeyForTestingOnly"})
+@patch('src.infrastructure.llm_factory.ChatGoogleGenerativeAI')
 def test_validate_recipe_with_non_default_extras_rejected(mock_llm):
     """Test that recipes using non-default extra ingredients are rejected"""
     mock_response = MagicMock()
@@ -104,8 +103,8 @@ def test_validate_recipe_with_non_default_extras_rejected(mock_llm):
     assert result["valid"] is False
     assert "soy sauce" in result["reasoning"].lower() or "extra" in result["reasoning"].lower()
 
-@patch.dict(os.environ, {"GOOGLE_API_KEY": "test-api-key"})
-@patch('agents.review_agent.ChatGoogleGenerativeAI')
+@patch.dict(os.environ, {"GOOGLE_API_KEY": "AIzaSyDummyKeyForTestingOnly"})
+@patch('src.infrastructure.llm_factory.ChatGoogleGenerativeAI')
 def test_validate_recipe_turkish_default_ingredients(mock_llm):
     """Test that Turkish default ingredients are recognized"""
     mock_response = MagicMock()
