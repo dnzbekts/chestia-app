@@ -2,10 +2,11 @@
 FastAPI route handlers for Chestia backend.
 """
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 import logging
 
 from src.api.schemas import GenerateRequest, ModifyRequest, FeedbackRequest
+from src.api.rate_limit import limiter
 from src.workflow import create_graph
 from src.infrastructure import get_db_connection, log_error, save_recipe
 from src.domain import filter_default_ingredients
@@ -20,7 +21,8 @@ graph = create_graph()
 
 
 @router.post("/generate")
-def generate_recipe(request: GenerateRequest):
+@limiter.limit("5/minute")
+def generate_recipe(payload: GenerateRequest, request: Request):
     """
     Generate a recipe from ingredients.
     
@@ -33,21 +35,21 @@ def generate_recipe(request: GenerateRequest):
     """
     try:
         # Step 1: Filter default ingredients BEFORE graph
-        filtered_ingredients = filter_default_ingredients(request.ingredients)
+        filtered_ingredients = filter_default_ingredients(payload.ingredients)
         
         # Step 2: Validate at least 1 non-default ingredient
         if len(filtered_ingredients) < 1:
             raise HTTPException(
                 status_code=422, 
-                detail=i18n.get_message(i18n.MIN_INGREDIENTS, request.lang)
+                detail=i18n.get_message(i18n.MIN_INGREDIENTS, payload.lang)
             )
         
         # Step 3: Invoke graph with filtered ingredients
         result = graph.invoke({
             "ingredients": filtered_ingredients,
-            "original_ingredients": request.ingredients,  # Keep originals for reference
-            "difficulty": request.difficulty,
-            "lang": request.lang,
+            "original_ingredients": payload.ingredients,  # Keep originals for reference
+            "difficulty": payload.difficulty,
+            "lang": payload.lang,
             "recipe": None,
             "extra_ingredients": [],
             "extra_count": 0,
@@ -61,7 +63,7 @@ def generate_recipe(request: GenerateRequest):
                     conn,
                     name=result["recipe"]["name"],
                     ingredients=filtered_ingredients,
-                    difficulty=request.difficulty,
+                    difficulty=payload.difficulty,
                     steps=result["recipe"]["steps"],
                     metadata=result["recipe"].get("metadata", {})
                 )
@@ -98,12 +100,13 @@ def generate_recipe(request: GenerateRequest):
             log_error(conn, "UnexpectedError", str(e))
         raise HTTPException(
             status_code=500, 
-            detail=i18n.get_message(i18n.INTERNAL_SERVER_ERROR, request.lang)
+            detail="An internal error occurred while processing the recipe."
         )
 
 
 @router.post("/modify")
-def modify_recipe(request: ModifyRequest):
+@limiter.limit("5/minute")
+def modify_recipe(payload: ModifyRequest, request: Request):
     """
     Modify or regenerate a recipe with updated ingredients.
         
@@ -114,9 +117,9 @@ def modify_recipe(request: ModifyRequest):
     """
     try:
         # Combine original + new ingredients
-        all_ingredients = list(request.original_ingredients)
-        if request.new_ingredients:
-            all_ingredients.extend(request.new_ingredients)
+        all_ingredients = list(payload.original_ingredients)
+        if payload.new_ingredients:
+            all_ingredients.extend(payload.new_ingredients)
         
         # Filter defaults
         filtered_ingredients = filter_default_ingredients(all_ingredients)
@@ -124,15 +127,15 @@ def modify_recipe(request: ModifyRequest):
         if len(filtered_ingredients) < 1:
             raise HTTPException(
                 status_code=422,
-                detail=i18n.get_message(i18n.MIN_INGREDIENTS, request.lang)
+                detail=i18n.get_message(i18n.MIN_INGREDIENTS, payload.lang)
             )
         
         # Invoke graph - starts fresh with new ingredient list
         result = graph.invoke({
             "ingredients": filtered_ingredients,
             "original_ingredients": all_ingredients,
-            "difficulty": request.difficulty,
-            "lang": request.lang,
+            "difficulty": payload.difficulty,
+            "lang": payload.lang,
             "recipe": None,
             "extra_ingredients": [],
             "extra_count": 0,
@@ -145,7 +148,7 @@ def modify_recipe(request: ModifyRequest):
                     conn,
                     name=result["recipe"]["name"],
                     ingredients=filtered_ingredients,
-                    difficulty=request.difficulty,
+                    difficulty=payload.difficulty,
                     steps=result["recipe"]["steps"],
                     metadata=result["recipe"].get("metadata", {})
                 )
@@ -173,38 +176,39 @@ def modify_recipe(request: ModifyRequest):
             log_error(conn, "UnexpectedError", str(e))
         raise HTTPException(
             status_code=500, 
-            detail=i18n.get_message(i18n.INTERNAL_SERVER_ERROR, request.lang)
+            detail="An internal error occurred while processing the recipe."
         )
 
 
 @router.post("/feedback")
-def handle_feedback(request: FeedbackRequest):
+@limiter.limit("10/minute")
+def handle_feedback(payload: FeedbackRequest, request: Request):
     """Cache approved recipes for future use."""
-    if not request.approved:
+    if not payload.approved:
         return {
             "status": "rejected", 
-            "message": i18n.get_message(i18n.FEEDBACK_REJECTED, request.lang)
+            "message": i18n.get_message(i18n.FEEDBACK_REJECTED, payload.lang)
         }
     
     try:
         with get_db_connection() as conn:
             
             # Filter default ingredients before caching
-            non_default_ingredients = filter_default_ingredients(request.ingredients)
+            non_default_ingredients = filter_default_ingredients(payload.ingredients)
             
             save_recipe(
                 conn,
-                name=request.recipe["name"],
+                name=payload.recipe.dict()["name"],
                 ingredients=non_default_ingredients,
-                difficulty=request.difficulty,
-                steps=request.recipe["steps"],
-                metadata=request.recipe.get("metadata", {})
+                difficulty=payload.difficulty,
+                steps=payload.recipe.dict()["steps"],
+                metadata=payload.recipe.dict().get("metadata", {})
             )
         
         return {
             "status": "success", 
-            "recipe": request.recipe,
-            "message": i18n.get_message(i18n.FEEDBACK_SUCCESS, request.lang)
+            "recipe": payload.recipe.dict(),
+            "message": i18n.get_message(i18n.FEEDBACK_SUCCESS, payload.lang)
         }
     except Exception as e:
         logger.error(f"Unexpected error in handle_feedback: {e}", exc_info=True)
@@ -212,5 +216,5 @@ def handle_feedback(request: FeedbackRequest):
             log_error(conn, "FeedbackError", str(e))
         raise HTTPException(
             status_code=500, 
-            detail=i18n.get_message(i18n.FEEDBACK_SAVE_FAILED, request.lang)
+            detail=i18n.get_message(i18n.FEEDBACK_SAVE_FAILED, payload.lang)
         )

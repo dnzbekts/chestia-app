@@ -44,10 +44,24 @@ class ModifyRequest(BaseModel):
         return v
 
 
+class RecipeSchema(BaseModel):
+    """Structured schema for a recipe."""
+    name: str = Field(..., min_length=1, max_length=100)
+    ingredients: List[str] = Field(..., min_length=1, max_length=50)
+    steps: List[str] = Field(..., min_length=1, max_length=100)
+    metadata: Optional[Dict[str, Any]] = Field(None)
+
+    @validator('ingredients', 'steps', each_item=True)
+    def validate_content_chars(cls, v):
+        if len(v) > 200:
+            raise ValueError("Item content too long")
+        return v
+
+
 class FeedbackRequest(BaseModel):
     """Request to provide feedback on a generated recipe."""
-    ingredients: List[str]
-    difficulty: str
+    ingredients: List[str] = Field(..., min_length=1, max_length=20)
+    difficulty: Literal["easy", "intermediate", "hard"]
     approved: bool
-    recipe: Dict[str, Any]
+    recipe: RecipeSchema
     lang: Literal["tr", "en"] = Field("en")

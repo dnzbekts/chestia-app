@@ -84,7 +84,7 @@ The backend orchestrates three specialized AI agents using LangGraph:
 - **LLM**: Google Gemini 1.5 Flash (via `langchain-google-genai`)
 - **API Framework**: FastAPI + Uvicorn
 - **Database**: SQLite with `sqlite-vec` extension for vector search
-- **Testing**: pytest (70 unit and integration tests)
+- **Testing**: pytest (65+ tests covering Unit, Integration, and Security)
 - **Utilities & Foundation** (Clean Architecture layout):
   - `src/infrastructure/llm_factory.py`: Centralized LLM & parameter management
   - `src/infrastructure/database.py`: Context-manager based SQLite operations & `EmbeddingService`
@@ -128,7 +128,10 @@ The backend orchestrates three specialized AI agents using LangGraph:
 │   │   │       ├── review_agent.py      # Validation & review
 │   │   │       └── search_agent.py      # Web search
 │   │   └── main.py                      # Application entry point
-│   ├── tests/                           # Test suite (11 files)
+│   ├── tests/                           # Comprehensive Test Suite (14 files)
+│   │   ├── conftest.py                  # Shared fixtures & extension loading
+│   │   ├── unit_tests/                  # Layer-specific unit tests (9 files)
+│   │   └── integration/                 # End-to-end & endpoint tests (4 files)
 │   └── requirements.txt
 ├── chestia-web/                         # Next.js Frontend
 │   ├── app/                             # Next.js App Router
@@ -293,26 +296,42 @@ The backend orchestrates three specialized AI agents using LangGraph:
 
 ## � Testing
 
-The backend includes comprehensive test coverage:
+The backend features a comprehensive test suite (65+ tests) following the Triple-A (Arrange-Act-Assert) pattern and TDD principles.
 
-- **Integration Tests** (`test_integration.py`): End-to-end flow with mocked LLM responses
-- **API Tests** (`test_api.py`): Endpoint validation
-- **Agent Tests** (`test_agents.py`, `test_review_agent.py`): Agent behavior verification
-- **Graph Tests** (`test_graph.py`): Orchestration flow
-- **Database Tests** (`test_database.py`): SQLite operations
-- **Configuration Tests** (`test_config.py`): Default ingredient filtering
+### Test Categories
 
-Run all tests:
+- **Unit Tests** (`tests/unit_tests/`):
+  - `test_schemas.py`: Pydantic validation and character constraints.
+  - `test_ingredients.py`: Ingredient normalization and default filtering.
+  - `test_exceptions.py`: Custom error hierarchy verification.
+  - `test_llm_factory.py`: API key validation and LLM configuration.
+  - `test_database.py`: SQLite CRUD and schema initialization.
+  - `test_localization.py`: Bilingual message retrieval (EN/TR).
+  - `test_recipe_agent.py`: Sanitization and LLM response parsing.
+  - `test_review_agent.py`: Recipe structure and logic validation.
+  - `test_graph.py`: LangGraph state machine and routing.
+
+- **Integration Tests** (`tests/integration/`):
+  - `test_endpoints.py`: End-to-end API verification for `/generate`, `/modify`, and `/feedback`.
+  - `test_security.py`: Security headers (CSP, HSTS) and CORS.
+  - `test_rate_limiting.py`: API resource protection verification.
+  - `test_feedback_validation.py`: Schema safety for stored recipes.
+
+### Running Tests
+
+Run the full suite:
 
 ```bash
 cd chestia-backend
+source venv/bin/activate
 pytest tests/ -v
 ```
 
-Run specific test suite:
+Run specific category:
 
 ```bash
-pytest tests/test_integration.py -v
+pytest tests/unit_tests/ -v
+pytest tests/integration/ -v
 ```
 
 ---
@@ -348,9 +367,13 @@ CopilotKit serves as the **bridge** between the frontend and the agentic backend
 
 ## 🔒 Security & Configuration
 
+- **CORS & Security Headers**: Strict middleware-level protection (CSP, HSTS, X-Frame-Options)
+- **Rate Limiting**: Endpoint-level protection via SlowAPI (prevents AI resource abuse)
+- **Input Validation**: Layered validation using Pydantic models (pinned 3-20 ingredients)
+- **Enhanced Schema Safety**: Strict `RecipeSchema` validation for feedback/storage
+- **RAG Context Sanitization**: Search results are summarized by LLM to mitigate indirect injection risks
 - **API Key Management**: Store sensitive keys in `.env` (never commit!)
-- **Input Validation**: All ingredients are sanitized with regex validation
-- **Error Masking**: Server errors are masked in production responses
+- **Error Masking**: Server errors are masked in production responses to prevent data leakage
 - **Turkish Character Support**: Validation regex supports Turkish characters (ğ, ü, ş, ı, ö, ç)
 
 ---
@@ -364,4 +387,4 @@ This project is private and proprietary.
 *Chestia - Elevating your culinary journey with AI.*
 
 ---
-Last reviewed: 2026-01-28
+Last reviewed: 2026-01-29 (Backend Test Suite Update)
