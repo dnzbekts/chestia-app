@@ -85,10 +85,12 @@ The backend orchestrates three specialized AI agents using LangGraph:
 - **API Framework**: FastAPI + Uvicorn
 - **Database**: SQLite with `sqlite-vec` extension for vector search
 - **Testing**: pytest (70 unit and integration tests)
-- **Utilities**:
-  - `config.py`: Default ingredient filtering
-  - `database.py`: SQLite operations & caching
-  - `utils/i18n.py`: Bilingual message management
+- **Utilities & Foundation** (Clean Architecture layout):
+  - `src/infrastructure/llm_factory.py`: Centralized LLM & parameter management
+  - `src/infrastructure/database.py`: Context-manager based SQLite operations & `EmbeddingService`
+  - `src/infrastructure/localization/i18n.py`: Bilingual message management (EN/TR)
+  - `src/core/logging_config.py`: Structured application logging
+  - `src/core/exceptions.py`: Domain-specific exception hierarchy
 
 ### Frontend
 
@@ -103,33 +105,37 @@ The backend orchestrates three specialized AI agents using LangGraph:
 
 ```text
 .
-├── chestia-backend/              # Python Multi-Agent Backend
+├── chestia-backend/                     # Python Multi-Agent Backend
 │   ├── src/
-│   │   ├── agents/               # AI Agents
-│   │   │   ├── recipe_agent.py   # Recipe generation agent
-│   │   │   ├── review_agent.py   # Validation & review agent
-│   │   │   └── search_agent.py   # Web search agent
-│   │   ├── utils/
-│   │   │   └── i18n.py           # Bilingual message utility
-│   │   ├── api.py                # FastAPI endpoints
-│   │   ├── graph.py              # LangGraph orchestration
-│   │   ├── database.py           # SQLite operations
-│   │   ├── config.py             # Default ingredients config
-│   │   └── chestia.db            # SQLite database
-│   ├── tests/                    # Test suite (8 files)
-│   │   ├── test_integration.py   # End-to-end flow tests
-│   │   ├── test_api.py           # API endpoint tests
-│   │   ├── test_agents.py        # Agent behavior tests
-│   │   ├── test_graph.py         # Graph orchestration tests
-│   │   └── ...                   # Additional test files
-│   └── requirements.txt          # Python dependencies
-├── chestia-web/                  # Next.js Frontend
-│   ├── app/                      # Next.js App Router
-│   ├── components/               # Reusable UI components
-│   └── package.json              # Dependencies & Scripts
-├── docs/                         # Technical documentation
-│   └── chestia-backend-integration-tests.md
-└── GEMINI.md                     # Project Rules & Standards
+│   │   ├── api/                         # Presentation Layer
+│   │   │   ├── routes.py                # FastAPI endpoints
+│   │   │   └── schemas.py               # Pydantic request/response models
+│   │   ├── core/                        # Cross-cutting Concerns
+│   │   │   ├── config.py                # Application settings
+│   │   │   ├── exceptions.py            # Domain-specific exceptions
+│   │   │   └── logging_config.py        # Structured logging
+│   │   ├── domain/                      # Business Logic
+│   │   │   └── ingredients.py           # Ingredient normalization & filtering
+│   │   ├── infrastructure/              # External Services
+│   │   │   ├── database.py              # SQLite operations & EmbeddingService
+│   │   │   ├── llm_factory.py           # Centralized LLM management
+│   │   │   └── localization/            # Bilingual i18n messages
+│   │   ├── workflow/                    # LangGraph Orchestration
+│   │   │   ├── graph.py                 # State machine & routing
+│   │   │   ├── copilotkit_adapter.py    # CopilotKit integration
+│   │   │   └── agents/                  # AI Agents
+│   │   │       ├── recipe_agent.py      # Recipe generation
+│   │   │       ├── review_agent.py      # Validation & review
+│   │   │       └── search_agent.py      # Web search
+│   │   └── main.py                      # Application entry point
+│   ├── tests/                           # Test suite (11 files)
+│   └── requirements.txt
+├── chestia-web/                         # Next.js Frontend
+│   ├── app/                             # Next.js App Router
+│   ├── components/                      # Reusable UI components
+│   └── package.json
+├── docs/                                # Technical documentation
+└── GEMINI.md                            # Project Rules & Standards
 ```
 
 ---
@@ -174,7 +180,7 @@ The backend orchestrates three specialized AI agents using LangGraph:
 5. **Run the development server:**
 
    ```bash
-   uvicorn src.api:app --reload
+   uvicorn src.main:app --reload
    ```
 
    The API will be available at `http://localhost:8000`
@@ -358,4 +364,4 @@ This project is private and proprietary.
 *Chestia - Elevating your culinary journey with AI.*
 
 ---
-*Last reviewed: 2026-01-28*
+Last reviewed: 2026-01-28

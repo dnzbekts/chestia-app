@@ -8,7 +8,6 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
 from src.workflow.graph import create_graph, GraphState
 
-@pytest.mark.asyncio
 def test_graph_initialization():
     """Test that the graph compiles correctly"""
     # Verify graph creation doesn't raise errors
