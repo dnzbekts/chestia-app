@@ -4,18 +4,19 @@ import os
 from unittest.mock import MagicMock, patch
 
 # Add src to path
-sys.path.append(os.path.join(os.path.dirname(__file__), '../src'))
+sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
-from agents.recipe_agent import RecipeAgent, RecipeInput
+from src.workflow.agents.recipe_agent import RecipeAgent
+from src.core.exceptions import IngredientValidationError
 
-@patch.dict(os.environ, {"GOOGLE_API_KEY": "test-api-key"})
+@patch.dict(os.environ, {"GOOGLE_API_KEY": "AIzaSyDummyKeyForTestingOnly"})
 def test_recipe_agent_initialization():
     """Test that RecipeAgent generates a valid recipe structure"""
     agent = RecipeAgent()
     assert agent is not None
 
-@patch.dict(os.environ, {"GOOGLE_API_KEY": "test-api-key"})
-@patch('agents.recipe_agent.ChatGoogleGenerativeAI')
+@patch.dict(os.environ, {"GOOGLE_API_KEY": "AIzaSyDummyKeyForTestingOnly"})
+@patch('src.infrastructure.llm_factory.ChatGoogleGenerativeAI')
 def test_generate_recipe_success(mock_llm):
     """Test successful recipe generation"""
     # Mock LLM response
@@ -35,9 +36,9 @@ def test_generate_recipe_success(mock_llm):
     assert len(result["ingredients"]) == 3
     assert "boil" in result["steps"]
 
-@patch.dict(os.environ, {"GOOGLE_API_KEY": "test-api-key"})
+@patch.dict(os.environ, {"GOOGLE_API_KEY": "AIzaSyDummyKeyForTestingOnly"})
 def test_recipe_agent_input_validation():
     """Test that empty input raises error"""
     agent = RecipeAgent()
-    with pytest.raises(ValueError):
+    with pytest.raises(IngredientValidationError):
         agent.generate([], "easy")

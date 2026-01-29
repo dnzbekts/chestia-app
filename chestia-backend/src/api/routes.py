@@ -1,0 +1,216 @@
+"""
+FastAPI route handlers for Chestia backend.
+"""
+
+from fastapi import APIRouter, HTTPException
+import logging
+
+from src.api.schemas import GenerateRequest, ModifyRequest, FeedbackRequest
+from src.workflow import create_graph
+from src.infrastructure import get_db_connection, log_error, save_recipe
+from src.domain import filter_default_ingredients
+from src.infrastructure.localization import i18n
+
+logger = logging.getLogger(__name__)
+
+router = APIRouter()
+
+# Initialize the graph
+graph = create_graph()
+
+
+@router.post("/generate")
+def generate_recipe(request: GenerateRequest):
+    """
+    Generate a recipe from ingredients.
+    
+    Flow:
+    1. Filter out default ingredients (salt, water, oil, etc.)
+    2. If no non-default ingredients remain, return error
+    3. Invoke graph with filtered ingredients
+    4. Graph auto-retries up to 3 times, adding max 2 extras if needed
+    5. Return final recipe or error
+    """
+    try:
+        # Step 1: Filter default ingredients BEFORE graph
+        filtered_ingredients = filter_default_ingredients(request.ingredients)
+        
+        # Step 2: Validate at least 1 non-default ingredient
+        if len(filtered_ingredients) < 1:
+            raise HTTPException(
+                status_code=422, 
+                detail=i18n.get_message(i18n.MIN_INGREDIENTS, request.lang)
+            )
+        
+        # Step 3: Invoke graph with filtered ingredients
+        result = graph.invoke({
+            "ingredients": filtered_ingredients,
+            "original_ingredients": request.ingredients,  # Keep originals for reference
+            "difficulty": request.difficulty,
+            "lang": request.lang,
+            "recipe": None,
+            "extra_ingredients": [],
+            "extra_count": 0,
+            "error": None,
+            "iteration_count": 0
+        })
+
+        if result and result.get("recipe"):
+            with get_db_connection() as conn:
+                save_recipe(
+                    conn,
+                    name=result["recipe"]["name"],
+                    ingredients=filtered_ingredients,
+                    difficulty=request.difficulty,
+                    steps=result["recipe"]["steps"],
+                    metadata=result["recipe"].get("metadata", {})
+                )
+        
+        # Step 4: Handle result
+        if result.get("error"):
+            # Log error to DB
+            with get_db_connection() as conn:
+                log_error(conn, "GenerationError", result["error"])
+            
+            logger.warning(f"Recipe generation error: {result['error']}")
+            
+            # Return user-friendly error
+            return {
+                "status": "error",
+                "message": result["error"],
+                "extra_ingredients_tried": result.get("extra_ingredients", [])
+            }
+        
+        # Step 5: Return successful recipe
+        recipe = result.get("recipe", {})
+        return {
+            "status": "success",
+            "recipe": recipe,
+            "extra_ingredients_added": result.get("extra_ingredients", []),
+            "iterations": result.get("iteration_count", 1)
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected error in generate_recipe: {e}", exc_info=True)
+        with get_db_connection() as conn:
+            log_error(conn, "UnexpectedError", str(e))
+        raise HTTPException(
+            status_code=500, 
+            detail=i18n.get_message(i18n.INTERNAL_SERVER_ERROR, request.lang)
+        )
+
+
+@router.post("/modify")
+def modify_recipe(request: ModifyRequest):
+    """
+    Modify or regenerate a recipe with updated ingredients.
+        
+    Use cases:
+    - User didn't like the recipe, wants a different one
+    - User wants to add new ingredients
+    - User wants to change difficulty
+    """
+    try:
+        # Combine original + new ingredients
+        all_ingredients = list(request.original_ingredients)
+        if request.new_ingredients:
+            all_ingredients.extend(request.new_ingredients)
+        
+        # Filter defaults
+        filtered_ingredients = filter_default_ingredients(all_ingredients)
+        
+        if len(filtered_ingredients) < 1:
+            raise HTTPException(
+                status_code=422,
+                detail=i18n.get_message(i18n.MIN_INGREDIENTS, request.lang)
+            )
+        
+        # Invoke graph - starts fresh with new ingredient list
+        result = graph.invoke({
+            "ingredients": filtered_ingredients,
+            "original_ingredients": all_ingredients,
+            "difficulty": request.difficulty,
+            "lang": request.lang,
+            "recipe": None,
+            "extra_ingredients": [],
+            "extra_count": 0,
+            "error": None,
+            "iteration_count": 0
+        })
+        if result and result.get("recipe"):
+            with get_db_connection() as conn:
+                save_recipe(
+                    conn,
+                    name=result["recipe"]["name"],
+                    ingredients=filtered_ingredients,
+                    difficulty=request.difficulty,
+                    steps=result["recipe"]["steps"],
+                    metadata=result["recipe"].get("metadata", {})
+                )
+        
+        if result.get("error"):
+            with get_db_connection() as conn:
+                log_error(conn, "ModificationError", result["error"])
+            
+            return {
+                "status": "error",
+                "message": result["error"]
+            }
+        
+        return {
+            "status": "success",
+            "recipe": result.get("recipe", {}),
+            "extra_ingredients_added": result.get("extra_ingredients", [])
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected error in modify_recipe: {e}", exc_info=True)
+        with get_db_connection() as conn:
+            log_error(conn, "UnexpectedError", str(e))
+        raise HTTPException(
+            status_code=500, 
+            detail=i18n.get_message(i18n.INTERNAL_SERVER_ERROR, request.lang)
+        )
+
+
+@router.post("/feedback")
+def handle_feedback(request: FeedbackRequest):
+    """Cache approved recipes for future use."""
+    if not request.approved:
+        return {
+            "status": "rejected", 
+            "message": i18n.get_message(i18n.FEEDBACK_REJECTED, request.lang)
+        }
+    
+    try:
+        with get_db_connection() as conn:
+            
+            # Filter default ingredients before caching
+            non_default_ingredients = filter_default_ingredients(request.ingredients)
+            
+            save_recipe(
+                conn,
+                name=request.recipe["name"],
+                ingredients=non_default_ingredients,
+                difficulty=request.difficulty,
+                steps=request.recipe["steps"],
+                metadata=request.recipe.get("metadata", {})
+            )
+        
+        return {
+            "status": "success", 
+            "recipe": request.recipe,
+            "message": i18n.get_message(i18n.FEEDBACK_SUCCESS, request.lang)
+        }
+    except Exception as e:
+        logger.error(f"Unexpected error in handle_feedback: {e}", exc_info=True)
+        with get_db_connection() as conn:
+            log_error(conn, "FeedbackError", str(e))
+        raise HTTPException(
+            status_code=500, 
+            detail=i18n.get_message(i18n.FEEDBACK_SAVE_FAILED, request.lang)
+        )

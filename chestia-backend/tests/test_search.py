@@ -4,26 +4,26 @@ import os
 import sys
 
 # Add src to sys.path
-sys.path.append(os.path.join(os.path.dirname(__file__), '../src'))
+sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
-from agents.search_agent import SearchAgent
-from graph import web_search_node, GraphState
+from src.workflow.agents.search_agent import SearchAgent
+from src.workflow.graph import RecipeGraphOrchestrator, GraphState
 from langchain_core.messages import AIMessage
 
 class TestSearchAgent:
     @pytest.fixture
     def mock_env(self):
-        with patch.dict(os.environ, {"GOOGLE_API_KEY": "fake_key", "TAVILY_API_KEY": "fake_key"}):
+        with patch.dict(os.environ, {"GOOGLE_API_KEY": "AIzaSyDummyKeyForTestingOnly", "TAVILY_API_KEY": "fake_key"}):
             yield
 
     @pytest.fixture
     def mock_tavily(self):
-        with patch('agents.search_agent.TavilySearchResults') as mock:
+        with patch('src.workflow.agents.search_agent.TavilySearch') as mock:
             yield mock
 
     @pytest.fixture
     def mock_llm(self):
-        with patch('agents.search_agent.ChatGoogleGenerativeAI') as mock:
+        with patch('src.infrastructure.llm_factory.LLMFactory.create_search_llm') as mock:
             yield mock
 
     def test_search_agent_query_construction(self, mock_env, mock_tavily, mock_llm):
@@ -76,14 +76,17 @@ class TestSearchAgent:
         assert len(result["steps"]) == 2
 
 
+
 class TestWebSearchNode:
-    @patch('graph.SearchAgent')
+    @patch('src.workflow.graph.SearchAgent')
     def test_web_search_node_success(self, mock_search_agent_cls):
         """Test successful search updates state with recipe"""
         # Setup
+        orchestrator = RecipeGraphOrchestrator()
         mock_agent = mock_search_agent_cls.return_value
         expected_recipe = {"name": "Found Recipe", "ingredients": [], "steps": []}
         mock_agent.search.return_value = expected_recipe
+        orchestrator.search_agent = mock_agent
         
         state = {
             "ingredients": ["chicken"], 
@@ -92,17 +95,19 @@ class TestWebSearchNode:
         }
         
         # Execute
-        result = web_search_node(state)
+        result = orchestrator.web_search_node(state)
         
         # Verify
         assert result["recipe"] == expected_recipe
 
-    @patch('graph.SearchAgent')
+    @patch('src.workflow.graph.SearchAgent')
     def test_web_search_node_failure(self, mock_search_agent_cls):
         """Test failed search returns state without recipe to trigger generation"""
         # Setup
+        orchestrator = RecipeGraphOrchestrator()
         mock_agent = mock_search_agent_cls.return_value
         mock_agent.search.return_value = None
+        orchestrator.search_agent = mock_agent
         
         state = {
             "ingredients": ["chicken"], 
@@ -111,7 +116,7 @@ class TestWebSearchNode:
         }
         
         # Execute
-        result = web_search_node(state)
+        result = orchestrator.web_search_node(state)
         
         # Verify
         assert result.get("recipe") is None

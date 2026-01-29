@@ -1,17 +1,10 @@
 """
-Configuration for default ingredients assumed to be available in every household.
+Ingredient domain logic for Chestia backend.
 
-These ingredients are excluded from:
-- User input validation requirements
-- Review agent extra ingredient checks  
-- Database caching keys (to avoid cache fragmentation)
+This module handles ingredient normalization and filtering of default/pantry ingredients.
 """
 
 from typing import List
-
-# CopilotKit Configuration
-COPILOTKIT_AGENT_NAME = "chestia_recipe_agent"
-COPILOTKIT_AGENT_DESCRIPTION = "Intelligent recipe generation from user-provided ingredients with auto-retry and validation"
 
 # Default ingredients available in every household
 # Includes both English and Turkish for better user flexibility
