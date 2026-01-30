@@ -6,18 +6,20 @@
 
 ## ✨ Features
 
-- **Smart Web Search**: Integrates Tavily AI to find real-world recipes before attempting LLM generation
-- **AI-Powered Recipe Generation**: Leverages Google Gemini (1.5 Flash) to craft recipes based on what you have in your fridge
-- **Difficulty-Based Recipes**: Choose Easy, Intermediate, or Hard to get recipes that match your cooking skills
-- **Smart Default Ingredients**: Automatically assumes basic pantry staples (water, oil, salt, spices) are available
-- **Auto-Retry with Suggestions**: If a recipe can't be made with your ingredients, the system automatically tries adding 1-2 extras (max 3 attempts)
-- **Hallucination Control**: Verification agents ensure recipes are logically sound and don't include imaginary ingredients
+- **Smart Input Validation**: Filters non-food items (e.g., "glass", "phone") using LLM-based classification to ensure safety.
+- **Normalized Difficulty**: Automatically standardizes human inputs (e.g., "medium" to "intermediate") for consistent processing.
+- **Smart Web Search**: Integrates Tavily AI to find real-world recipes before attempting LLM generation.
+- **AI-Powered Recipe Generation**: Leverages Google Gemini (1.5 Flash) to craft recipes based on what you have in your fridge.
+- **Difficulty-Based Recipes**: Choose Easy, Intermediate, or Hard to get recipes that match your cooking skills.
+- **Smart Default Ingredients**: Automatically assumes basic pantry staples (water, oil, salt, spices) are available.
+- **Auto-Retry with Suggestions**: If a recipe can't be made with your ingredients, the system automatically tries adding 1-2 extras (max 3 attempts).
+- **Hallucination Control**: Double-layered verification (Validation Agent + Review Agent) ensures ingredients are real and recipes are logically sound.
 - **Smart Caching**: Approved recipes are stored in SQLite. It uses dual-layer retrieval:
   - **Exact Cache Check**: Instant hit for identical ingredient lists.
   - **Semantic Search**: Fuzzy matching via vector embeddings (Gemini + `sqlite-vec`) for variations like "fusilli" vs "pasta".
-- **Recipe Modification**: Don't like the result? Request a new version or add ingredients via `/modify` endpoint
-- **Bilingual Support**: Full Turkish/English support for all API messages
-- **Premium Design**: Dark-mode focused experience built with Next.js and Tailwind CSS v4
+- **Recipe Modification**: Don't like the result? Request a new version or add ingredients via `/modify` endpoint.
+- **Bilingual Support**: Full Turkish/English support for all API messages.
+- **Premium Design**: Dark-mode focused experience built with Next.js and Tailwind CSS v4.
 
 ---
 
@@ -28,7 +30,10 @@
 ```mermaid
 graph TD
     User([User: ingredients + difficulty]) --> Filter[Filter Default Ingredients]
-    Filter --> ExactCache{Exact Cache?}
+    Filter --> Validation[Validation Agent]
+    Validation -- "Invalid/ <2 Food" --> Error([Error: Invalid Input])
+    Validation -- Valid --> ExactCache{Exact Cache?}
+    
     ExactCache -- Hit --> Review[Review Agent]
     ExactCache -- Miss --> SemanticCache{Semantic Search?}
     
@@ -42,7 +47,7 @@ graph TD
     Review -- Yes --> Result([Return Recipe])
     Review -- No, iter<3 --> AddExtras[Add 1-2 Extras]
     AddExtras --> Generate
-    Review -- No, iter>=3 --> Error([Error: No Recipe Found])
+    Review -- No, iter>=3 --> ErrorResult([Error: No Recipe Found])
     
     Result -- User Approves --> Feedback[POST /feedback]
     Feedback --> Done([Cache & Done])
@@ -52,26 +57,33 @@ graph TD
 
 The backend orchestrates three specialized AI agents using LangGraph:
 
-1. **RecipeAgent** (`recipe_agent.py`)
+1. **ValidationAgent** (`validation_agent.py`)
+   - The first line of defense in the graph
+   - Filters non-edible items (e.g., "phone", "glass") using LLM classification
+   - Normalizes difficulty inputs (e.g., "medium" -> "intermediate")
+   - Enforces a minimum of 2 valid food ingredients
+
+2. **RecipeAgent** (`recipe_agent.py`)
    - Generates recipes using Google Gemini 1.5 Flash (temperature: 0.7)
    - Enforces strict ingredient constraints
-   - Adjusts complexity based on difficulty level
+   - Adjusts complexity based on normalized difficulty level
 
-2. **SearchAgent** (`search_agent.py`)
+3. **SearchAgent** (`search_agent.py`)
    - Performs web searches using Tavily AI
    - Finds existing recipes to avoid unnecessary generation
    - Extracts relevant cooking information for the RecipeAgent
 
-3. **ReviewAgent** (`review_agent.py`)
+4. **ReviewAgent** (`review_agent.py`)
    - Validates recipes using Google Gemini 1.5 Flash (temperature: 0)
    - Checks for hallucinations and logical errors
    - Verifies difficulty appropriateness
    - Suggests additional ingredients if needed
 
-4. **Orchestration** (`graph.py`)
+5. **Orchestration** (`graph.py`)
    - Coordinates agent interactions via LangGraph
    - Manages auto-retry flow (max 3 iterations)
    - Handles state and error propagation
+   - Ensures data consistency across all nodes
 
 ---
 
@@ -367,9 +379,10 @@ CopilotKit serves as the **bridge** between the frontend and the agentic backend
 
 ## 🔒 Security & Configuration
 
+- **Double-Layered Verification**: Input validation via `ValidationAgent` + Output review via `ReviewAgent`
 - **CORS & Security Headers**: Strict middleware-level protection (CSP, HSTS, X-Frame-Options)
 - **Rate Limiting**: Endpoint-level protection via SlowAPI (prevents AI resource abuse)
-- **Input Validation**: Layered validation using Pydantic models (pinned 3-20 ingredients)
+- **Input Sanitization**: LLM-based filtering of non-food items to prevent system abuse
 - **Enhanced Schema Safety**: Strict `RecipeSchema` validation for feedback/storage
 - **RAG Context Sanitization**: Search results are summarized by LLM to mitigate indirect injection risks
 - **API Key Management**: Store sensitive keys in `.env` (never commit!)
@@ -387,4 +400,4 @@ This project is private and proprietary.
 *Chestia - Elevating your culinary journey with AI.*
 
 ---
-Last reviewed: 2026-01-29 (Backend Test Suite Update)
+Last reviewed: 2026-01-30 (Validation Agent & Consistency Fix)
