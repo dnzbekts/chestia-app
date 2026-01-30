@@ -51,10 +51,22 @@ async def add_security_headers(request: Request, call_next):
 # Include API routes
 app.include_router(router)
 
-# Initialize CopilotKit Remote Endpoint with LangGraph AGUI agent
+# Custom agent class to fix SDK v0.1.77 bug (missing dict_repr method)
+class ChestiaLangGraphAgent(LangGraphAGUIAgent):
+    """Extended LangGraphAGUIAgent with dict_repr for SDK compatibility."""
+    
+    def dict_repr(self):
+        """Return dictionary representation for SDK info endpoint."""
+        return {
+            "name": self.name,
+            "description": self.description,
+        }
+
+
+# Initialize CopilotKit Remote Endpoint with custom LangGraph agent
 copilotkit_sdk = CopilotKitRemoteEndpoint(
     agents=[
-        LangGraphAGUIAgent(
+        ChestiaLangGraphAgent(
             name=COPILOTKIT_AGENT_NAME,
             description=COPILOTKIT_AGENT_DESCRIPTION,
             graph=copilotkit_graph,

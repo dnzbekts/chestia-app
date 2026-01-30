@@ -50,24 +50,50 @@ class SearchAgent:
         """
         from src.domain.ingredients import DEFAULT_INGREDIENTS
         
-        # Construct strict query
-        default_ing_str = ", ".join(sorted(DEFAULT_INGREDIENTS))
+        # Construct query (must be under 400 chars for Tavily)
         user_ing_str = ", ".join(ingredients)
         
-        query = (
-            f"recipe using ONLY {user_ing_str} "
-            f"(pantry: {default_ing_str}) "
-            f"difficulty {difficulty} full recipe steps"
-        )
+        # Keep query concise but add "only these ingredients" constraint
+        query = f"{difficulty} recipe using only {user_ing_str}"
         
         try:
             # Execute Search
             logger.info(f"Searching for recipe with query: {query[:100]}...")
-            results = self.search_tool.invoke({"query": query})
+            raw_results = self.search_tool.invoke({"query": query})
             
-            if not results or not isinstance(results, list):
-                logger.warning("No search results returned")
+            # Debug: log raw response type and keys
+            logger.info(f"Tavily raw response type: {type(raw_results)}")
+            if isinstance(raw_results, dict):
+                logger.info(f"Tavily response keys: {list(raw_results.keys())}")
+                # Check for error response
+                if 'error' in raw_results:
+                    logger.error(f"Tavily API error: {raw_results.get('error')}")
+                results = raw_results.get('results', [])
+                logger.info(f"Results list length: {len(results)}")
+            elif isinstance(raw_results, list):
+                results = raw_results
+                logger.info(f"Tavily returned list directly with {len(results)} items")
+            else:
+                logger.warning(f"Unexpected Tavily response type: {type(raw_results)}")
                 return None
+            
+            if not results:
+                logger.warning("No search results returned (results list is empty)")
+                return None
+            
+            logger.info(f"Tavily returned {len(results)} results")
+            
+            # Extract content from search results
+            context = "\n".join([
+                f"- {r.get('title', '')}: {r.get('content', r.get('snippet', ''))}"
+                for r in results if isinstance(r, dict)
+            ])
+            
+            if not context.strip():
+                logger.warning("Search results contained no usable content")
+                return None
+            
+            logger.info(f"Extracted content from {len(results)} search results")
                 
             # 1. Sanitize/Summarize search results to mitigate prompt injection
             # Instead of raw context, we extract only structured info from each snippet
@@ -84,6 +110,9 @@ class SearchAgent:
             
             summary_response = self.llm.invoke(summarize_prompt)
             sanitized_context = summary_response.content
+            
+            # Define default ingredients string for parse prompt
+            default_ing_str = "salt, pepper, oil, butter, garlic, onion, herbs, spices"
             
             # 2. Parse with LLM using sanitized context
             parse_prompt = f"""

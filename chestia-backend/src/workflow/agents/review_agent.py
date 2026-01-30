@@ -76,7 +76,8 @@ class ReviewAgent:
         self, 
         recipe: Dict[str, Any], 
         user_ingredients: List[str], 
-        difficulty: str
+        difficulty: str,
+        source: str = "generate"
     ) -> Dict[str, Any]:
         """
         Validate recipe for hallucinations, logic errors, and difficulty match.
@@ -85,6 +86,7 @@ class ReviewAgent:
             recipe: Generated recipe to validate
             user_ingredients: Original user-provided ingredients
             difficulty: Requested difficulty level
+            source: Recipe source - 'generate', 'web_search', 'cache', 'semantic_search'
             
         Returns:
             Validation result with 'valid', 'reasoning', and 'suggested_extras' keys
@@ -100,10 +102,36 @@ class ReviewAgent:
         # Format default ingredients list for prompt
         default_ingredients_list = ', '.join(sorted(DEFAULT_INGREDIENTS))
         
+        # Use relaxed rules for web_search sources
+        if source == "web_search":
+            validation_rules = f"""
+        VALIDATION RULES (Relaxed for Web Search):
+        1. Recipe ingredients should have 80%+ overlap with User Ingredients
+        2. Recipe MAY include 1-2 more additional common cooking ingredients
+        3. Recipe MAY use any DEFAULT ingredients freely
+        4. Steps must be logical and achievable
+        5. Must be a real, edible recipe
+        6. Complexity should reasonably match {difficulty}
+        """
+        else:
+            validation_rules = f"""
+        VALIDATION RULES (Strict for Generated):
+        1. Recipe MAY use any DEFAULT ingredients freely
+        2. Recipe MUST primarily use User Ingredients
+        3. If recipe uses NON-DEFAULT ingredients NOT in user list -> INVALID
+        4. Steps must be logical and achievable
+        5. Must be a real, edible recipe
+        6. Complexity must match {difficulty}:
+           - Easy: Simple steps, minimal technique
+           - Intermediate: Moderate complexity
+           - Hard: Advanced techniques
+        """
+        
         prompt = f"""
         Role: Senior Culinary Reviewer
         Task: Validate recipe and suggest improvements if invalid.
         
+        Source: {source}
         User Ingredients: {', '.join(user_ingredients)}
         Requested Difficulty: {difficulty}
         
@@ -115,16 +143,7 @@ class ReviewAgent:
         Ingredients: {', '.join(recipe.get('ingredients', []))}
         Steps: {', '.join(recipe.get('steps', []))}
         
-        VALIDATION RULES:
-        1. Recipe MAY use any DEFAULT ingredients freely
-        2. Recipe MUST primarily use User Ingredients
-        3. If recipe uses NON-DEFAULT ingredients NOT in user list -> INVALID
-        4. Steps must be logical and achievable
-        5. Must be a real, edible recipe
-        6. Complexity must match {difficulty}:
-           - Easy: Simple steps, minimal technique
-           - Intermediate: Moderate complexity
-           - Hard: Advanced techniques
+        {validation_rules}
         
         IMPORTANT: If the recipe is INVALID, suggest 1-2 common ingredients that could help create a valid recipe.
         
@@ -146,3 +165,4 @@ class ReviewAgent:
                 "reasoning": f"Validation error: {str(e)}",
                 "suggested_extras": []
             }
+

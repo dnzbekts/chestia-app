@@ -54,19 +54,31 @@ def generate_recipe(payload: GenerateRequest, request: Request):
             "extra_ingredients": [],
             "extra_count": 0,
             "error": None,
-            "iteration_count": 0
+            "iteration_count": 0,
+            "source_node": None
         })
 
-        if result and result.get("recipe"):
-            with get_db_connection() as conn:
-                save_recipe(
-                    conn,
-                    name=result["recipe"]["name"],
-                    ingredients=filtered_ingredients,
-                    difficulty=payload.difficulty,
-                    steps=result["recipe"]["steps"],
-                    metadata=result["recipe"].get("metadata", {})
-                )
+        # Save only newly generated or web-searched recipes (not cache/semantic hits)
+        source_node = result.get("source_node", "unknown")
+        if result and result.get("recipe") and source_node in ("generate", "web_search"):
+            try:
+                recipe = result["recipe"]
+                metadata = recipe.get("metadata", {})
+                if isinstance(metadata, str):
+                    import json
+                    metadata = json.loads(metadata)
+                
+                with get_db_connection() as conn:
+                    save_recipe(
+                        conn,
+                        name=recipe["name"],
+                        ingredients=filtered_ingredients,
+                        difficulty=metadata.get("difficulty", payload.difficulty),
+                        steps=recipe["steps"],
+                        metadata=metadata
+                    )
+            except Exception as e:
+                logger.warning(f"Failed to save recipe: {e}")
         
         # Step 4: Handle result
         if result.get("error"):
@@ -88,6 +100,7 @@ def generate_recipe(payload: GenerateRequest, request: Request):
         return {
             "status": "success",
             "recipe": recipe,
+            "source_node": result.get("source_node", "unknown"),
             "extra_ingredients_added": result.get("extra_ingredients", []),
             "iterations": result.get("iteration_count", 1)
         }
@@ -140,18 +153,31 @@ def modify_recipe(payload: ModifyRequest, request: Request):
             "extra_ingredients": [],
             "extra_count": 0,
             "error": None,
-            "iteration_count": 0
+            "iteration_count": 0,
+            "source_node": None
         })
-        if result and result.get("recipe"):
-            with get_db_connection() as conn:
-                save_recipe(
-                    conn,
-                    name=result["recipe"]["name"],
-                    ingredients=filtered_ingredients,
-                    difficulty=payload.difficulty,
-                    steps=result["recipe"]["steps"],
-                    metadata=result["recipe"].get("metadata", {})
-                )
+        
+        # Save only newly generated or web-searched recipes (not cache/semantic hits)
+        source_node = result.get("source_node", "unknown")
+        if result and result.get("recipe") and source_node in ("generate", "web_search"):
+            try:
+                recipe = result["recipe"]
+                metadata = recipe.get("metadata", {})
+                if isinstance(metadata, str):
+                    import json
+                    metadata = json.loads(metadata)
+                
+                with get_db_connection() as conn:
+                    save_recipe(
+                        conn,
+                        name=recipe["name"],
+                        ingredients=filtered_ingredients,
+                        difficulty=metadata.get("difficulty", payload.difficulty),
+                        steps=recipe["steps"],
+                        metadata=metadata
+                    )
+            except Exception as e:
+                logger.warning(f"Failed to save recipe: {e}")
         
         if result.get("error"):
             with get_db_connection() as conn:
@@ -165,6 +191,7 @@ def modify_recipe(payload: ModifyRequest, request: Request):
         return {
             "status": "success",
             "recipe": result.get("recipe", {}),
+            "source_node": result.get("source_node", "unknown"),
             "extra_ingredients_added": result.get("extra_ingredients", [])
         }
         

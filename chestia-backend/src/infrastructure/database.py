@@ -187,16 +187,18 @@ def find_recipe_by_ingredients(
     non_default_ingredients = filter_default_ingredients(ingredients)
     ingredients_json = json.dumps(sorted(non_default_ingredients))
     
+    logger.info(f"Cache lookup: {ingredients_json}, difficulty={difficulty}")
+    
     cursor.execute("""
         SELECT * FROM recipes WHERE ingredients = ? AND difficulty = ?
     """, (ingredients_json, difficulty))
     
     row = cursor.fetchone()
     if row:
-        logger.debug(f"Cache hit for ingredients: {ingredients_json}")
+        logger.info(f"Cache HIT: recipe_id={row['id']}, name={row['name']}")
         return dict(row)
     
-    logger.debug(f"Cache miss for ingredients: {ingredients_json}")
+    logger.info(f"Cache MISS for: {ingredients_json}")
     return None
 
 
@@ -253,6 +255,16 @@ def find_recipe_semantically(
         query_vector = embedding_service.generate_embedding(query_text)
         
         cursor = conn.cursor()
+        
+        # Check if any embeddings exist
+        cursor.execute("SELECT COUNT(*) as cnt FROM vec_recipes")
+        count = cursor.fetchone()['cnt']
+        logger.info(f"Semantic search: {count} embeddings in database")
+        
+        if count == 0:
+            logger.warning("No embeddings in database - semantic search will fail")
+            return None
+        
         cursor.execute("""
             SELECT 
                 r.*, 
@@ -290,6 +302,9 @@ def save_recipe(
     """
     Save a recipe and its embedding to the database.
     
+    Checks for duplicates before saving. If a recipe with the same
+    ingredients and difficulty already exists, returns the existing ID.
+    
     Args:
         conn: Database connection
         name: Recipe name
@@ -299,11 +314,20 @@ def save_recipe(
         metadata: Optional recipe metadata
         
     Returns:
-        Recipe ID
+        Recipe ID (existing if duplicate, new if created)
         
     Raises:
         DatabaseError: If save operation fails
     """
+    # Check for existing recipe with same ingredients and difficulty
+    existing = find_recipe_by_ingredients(conn, ingredients, difficulty)
+    if existing:
+        logger.info(
+            f"Recipe already exists with ID {existing['id']}, "
+            f"skipping duplicate for '{name}'"
+        )
+        return existing['id']
+    
     cursor = conn.cursor()
     
     try:

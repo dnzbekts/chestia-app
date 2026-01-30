@@ -37,6 +37,7 @@ class GraphState(TypedDict):
     extra_count: int                    # How many extras added
     error: Optional[str]                # Error message if any
     iteration_count: int                # Current iteration
+    source_node: Optional[str]          # Which node returned the recipe (cache, semantic, web_search, generate)
 
 
 class RecipeGraphOrchestrator:
@@ -76,6 +77,7 @@ class RecipeGraphOrchestrator:
                 logger.info("Cache hit - recipe found")
                 return {
                     "recipe": recipe,
+                    "source_node": "cache",
                     "iteration_count": state.get("iteration_count", 0) + 1,
                     "messages": [i18n.get_message(i18n.SEARCHING_CACHE, state.get("lang", "en"))]
                 }
@@ -102,6 +104,7 @@ class RecipeGraphOrchestrator:
                     logger.info("Semantic search hit - similar recipe found")
                     return {
                         "recipe": recipe,
+                        "source_node": "semantic_search",
                         "messages": [i18n.get_message(i18n.SEMANTIC_SEARCH_HIT, state.get("lang", "en"))]
                     }
         except Exception as e:
@@ -127,6 +130,7 @@ class RecipeGraphOrchestrator:
                 logger.info("Web search hit - recipe found")
                 return {
                     "recipe": recipe,
+                    "source_node": "web_search",
                     "messages": [i18n.get_message(i18n.WEB_SEARCH_HIT, state.get("lang", "en"))]
                 }
         except Exception as e:
@@ -145,6 +149,7 @@ class RecipeGraphOrchestrator:
             logger.info(f"Generated recipe: {result.get('name', 'Unknown')}")
             return {
                 "recipe": result,
+                "source_node": "generate",
                 "messages": [i18n.get_message(i18n.GENERATING_RECIPE, state.get("lang", "en"))]
             }
         except RecipeGenerationError as e:
@@ -177,7 +182,8 @@ class RecipeGraphOrchestrator:
             review = self.review_agent.validate(
                 state["recipe"],
                 state["ingredients"],
-                state["difficulty"]
+                state["difficulty"],
+                source=state.get("source_node", "generate")
             )
         except Exception as e:
             logger.error(f"Review failed: {e}", exc_info=True)
@@ -254,15 +260,17 @@ class RecipeGraphOrchestrator:
         return END
 
     def route_after_cache(self, state: GraphState) -> str:
-        """Route after cache check."""
+        """Route after cache check. Cached recipes are pre-validated, skip review."""
         if state.get("recipe"):
-            return "review_recipe"
+            logger.info("Cache hit - skipping review (pre-validated)")
+            return END  # Cached recipes are already validated
         return "semantic_search"
 
     def route_after_semantic(self, state: GraphState) -> str:
-        """Route after semantic search."""
+        """Route after semantic search. Semantic matches are pre-validated, skip review."""
         if state.get("recipe"):
-            return "review_recipe"
+            logger.info("Semantic hit - skipping review (pre-validated)")
+            return END  # Semantic matches are already validated
         return "web_search"
 
     def route_after_search(self, state: GraphState) -> str:
@@ -297,7 +305,7 @@ class RecipeGraphOrchestrator:
             "search_cache",
             self.route_after_cache,
             {
-                "review_recipe": "review_recipe",
+                END: END,  # Cache hits skip review
                 "semantic_search": "semantic_search"
             }
         )
@@ -306,7 +314,7 @@ class RecipeGraphOrchestrator:
             "semantic_search",
             self.route_after_semantic,
             {
-                "review_recipe": "review_recipe",
+                END: END,  # Semantic hits skip review
                 "web_search": "web_search"
             }
         )

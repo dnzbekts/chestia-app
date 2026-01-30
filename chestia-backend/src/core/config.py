@@ -27,7 +27,7 @@ SEARCH_CONFIG = {
 GRAPH_CONFIG = {
     "max_iterations": 3,
     "max_extra_ingredients": 2,
-    "semantic_search_threshold": 0.5,
+    "semantic_search_threshold": 0.65,  # Balanced threshold for precision/recall
 }
 
 # Database Configuration
