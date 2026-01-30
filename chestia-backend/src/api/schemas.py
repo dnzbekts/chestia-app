@@ -10,9 +10,9 @@ import re
 class GenerateRequest(BaseModel):
     """Request to generate a new recipe from ingredients."""
     ingredients: List[str] = Field(..., min_length=3, max_length=20)
-    difficulty: Literal["easy", "intermediate", "hard"] = Field(
+    difficulty: str = Field(
         ...,
-        description="Recipe difficulty level: easy, intermediate, or hard"
+        description="Recipe difficulty level: easy, intermediate, or hard (variants like 'medium' are normalized)"
     )
     lang: Literal["tr", "en"] = Field("en", description="Preferred language for messages: tr or en")
 
@@ -29,7 +29,7 @@ class ModifyRequest(BaseModel):
     """Request to modify/regenerate a recipe."""
     original_ingredients: List[str] = Field(..., min_length=3, max_length=20)
     new_ingredients: Optional[List[str]] = Field(None, max_length=20)
-    difficulty: Literal["easy", "intermediate", "hard"]
+    difficulty: str = Field(..., description="Difficulty level (easy, intermediate, hard)")
     modification_note: Optional[str] = None  # e.g., "make it spicier"
     lang: Literal["tr", "en"] = Field("en", description="Preferred language for messages")
     
@@ -61,7 +61,7 @@ class RecipeSchema(BaseModel):
 class FeedbackRequest(BaseModel):
     """Request to provide feedback on a generated recipe."""
     ingredients: List[str] = Field(..., min_length=1, max_length=20)
-    difficulty: Literal["easy", "intermediate", "hard"]
+    difficulty: str = Field(..., description="Difficulty level (easy, intermediate, hard)")
     approved: bool
     recipe: RecipeSchema
     lang: Literal["tr", "en"] = Field("en")
