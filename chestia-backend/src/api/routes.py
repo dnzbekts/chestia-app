@@ -67,13 +67,13 @@ def generate_recipe(payload: GenerateRequest, request: Request):
                 if isinstance(metadata, str):
                     import json
                     metadata = json.loads(metadata)
-                
+
                 with get_db_connection() as conn:
                     save_recipe(
                         conn,
                         name=recipe["name"],
-                        ingredients=filtered_ingredients,
-                        difficulty=metadata.get("difficulty", payload.difficulty),
+                        ingredients=result["ingredients"],  # Use validated ingredients from graph result
+                        difficulty=result.get("difficulty", payload.difficulty),
                         steps=recipe["steps"],
                         metadata=metadata
                     )
@@ -171,8 +171,8 @@ def modify_recipe(payload: ModifyRequest, request: Request):
                     save_recipe(
                         conn,
                         name=recipe["name"],
-                        ingredients=filtered_ingredients,
-                        difficulty=metadata.get("difficulty", payload.difficulty),
+                        ingredients=result["ingredients"],  # Use validated ingredients from graph result
+                        difficulty=result.get("difficulty", payload.difficulty),
                         steps=recipe["steps"],
                         metadata=metadata
                     )

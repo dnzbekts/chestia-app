@@ -12,6 +12,7 @@ from langgraph.checkpoint.memory import MemorySaver
 from src.workflow.agents.recipe_agent import RecipeAgent
 from src.workflow.agents.review_agent import ReviewAgent
 from src.workflow.agents.search_agent import SearchAgent
+from src.workflow.agents.validation_agent import ValidationAgent
 from src.infrastructure.database import get_db_connection, find_recipe_by_ingredients, find_recipe_semantically
 from src.infrastructure.localization import i18n
 from src.core.config import GRAPH_CONFIG
@@ -47,7 +48,8 @@ class RecipeGraphOrchestrator:
         self,
         recipe_agent: Optional[RecipeAgent] = None,
         review_agent: Optional[ReviewAgent] = None,
-        search_agent: Optional[SearchAgent] = None
+        search_agent: Optional[SearchAgent] = None,
+        validation_agent: Optional[ValidationAgent] = None
     ):
         """
         Initialize the orchestrator.
@@ -56,14 +58,35 @@ class RecipeGraphOrchestrator:
             recipe_agent: Optional RecipeAgent instance (creates new if None)
             review_agent: Optional ReviewAgent instance (creates new if None)
             search_agent: Optional SearchAgent instance (creates new if None)
+            validation_agent: Optional ValidationAgent instance (creates new if None)
         """
         self.recipe_agent = recipe_agent or RecipeAgent()
         self.review_agent = review_agent or ReviewAgent()
         self.search_agent = search_agent or SearchAgent()
+        self.validation_agent = validation_agent or ValidationAgent()
         
         # Load configuration
         self.max_iterations = GRAPH_CONFIG["max_iterations"]
         self.max_extras = GRAPH_CONFIG["max_extra_ingredients"]
+
+    def validate_ingredients_node(self, state: GraphState) -> Dict[str, Any]:
+        """Validate and sanitize ingredients list and difficulty."""
+        logger.info(f"Validating ingredients: {state['ingredients']}")
+        
+        result = self.validation_agent.validate(
+            state["ingredients"],
+            state["difficulty"]
+        )
+        
+        if result.get("error"):
+            logger.warning(f"Validation failed: {result['error']}")
+            return {"error": result["error"]}
+        
+        return {
+            "ingredients": result["valid_ingredients"],
+            "difficulty": result["normalized_difficulty"],
+            "error": None
+        }
 
     def search_cache_node(self, state: GraphState) -> Dict[str, Any]:
         """Check if a recipe for these ingredients + difficulty exists in SQLite."""
@@ -279,6 +302,12 @@ class RecipeGraphOrchestrator:
             return "review_recipe"
         return "generate_recipe"
 
+    def route_after_validation(self, state: GraphState) -> str:
+        """Route after validation based on error status."""
+        if state.get("error"):
+            return END
+        return "search_cache"
+
     def create_graph(self, with_checkpointer: bool = False):
         """
         Create the recipe generation workflow graph.
@@ -292,6 +321,7 @@ class RecipeGraphOrchestrator:
         workflow = StateGraph(GraphState)
         
         # Add nodes
+        workflow.add_node("validate_ingredients", self.validate_ingredients_node)
         workflow.add_node("search_cache", self.search_cache_node)
         workflow.add_node("semantic_search", self.semantic_search_node)
         workflow.add_node("web_search", self.web_search_node)
@@ -299,7 +329,16 @@ class RecipeGraphOrchestrator:
         workflow.add_node("review_recipe", self.review_recipe_node)
         
         # Add edges
-        workflow.add_edge(START, "search_cache")
+        workflow.add_edge(START, "validate_ingredients")
+        
+        workflow.add_conditional_edges(
+            "validate_ingredients",
+            self.route_after_validation,
+            {
+                END: END,
+                "search_cache": "search_cache"
+            }
+        )
         
         workflow.add_conditional_edges(
             "search_cache",
