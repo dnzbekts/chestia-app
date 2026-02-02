@@ -77,6 +77,7 @@ class ReviewAgent:
         recipe: Dict[str, Any], 
         user_ingredients: List[str], 
         difficulty: str,
+        lang: str = "en",
         source: str = "generate"
     ) -> Dict[str, Any]:
         """
@@ -134,6 +135,7 @@ class ReviewAgent:
         Source: {source}
         User Ingredients: {', '.join(user_ingredients)}
         Requested Difficulty: {difficulty}
+        Requested Language: {lang.upper()}
         
         DEFAULT INGREDIENTS (always available, don't count as extras):
         {default_ingredients_list}
@@ -145,13 +147,15 @@ class ReviewAgent:
         
         {validation_rules}
         
-        IMPORTANT: If the recipe is INVALID, suggest 1-2 common ingredients that could help create a valid recipe.
+        IMPORTANT: 
+        1. If the recipe is INVALID, suggest 1-2 common ingredients that could help create a valid recipe.
+        2. All textual responses (reasoning, suggestions) MUST be in {lang.upper()}.
         
         Return JSON:
         {{
             "valid": true/false,
-            "reasoning": "Detailed explanation including difficulty assessment",
-            "suggested_extras": ["ingredient1", "ingredient2"]  // Only if invalid, max 2 suggestions
+            "reasoning": "Detailed explanation in {lang.upper()} including difficulty assessment",
+            "suggested_extras": ["ingredient1 in {lang.upper()}", "ingredient2 in {lang.upper()}"]  // Only if invalid, max 2 suggestions
         }}
         """
         

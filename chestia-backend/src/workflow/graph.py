@@ -75,7 +75,8 @@ class RecipeGraphOrchestrator:
         
         result = self.validation_agent.validate(
             state["ingredients"],
-            state["difficulty"]
+            state["difficulty"],
+            state.get("lang", "en")
         )
         
         if result.get("error"):
@@ -94,7 +95,8 @@ class RecipeGraphOrchestrator:
             recipe = find_recipe_by_ingredients(
                 conn,
                 state["ingredients"],
-                state["difficulty"]
+                state["difficulty"],
+                state.get("lang", "en")
             )
             if recipe:
                 logger.info("Cache hit - recipe found")
@@ -121,7 +123,8 @@ class RecipeGraphOrchestrator:
                 recipe = find_recipe_semantically(
                     conn,
                     state["ingredients"],
-                    state["difficulty"]
+                    state["difficulty"],
+                    state.get("lang", "en")
                 )
                 if recipe:
                     logger.info("Semantic search hit - similar recipe found")
@@ -147,7 +150,8 @@ class RecipeGraphOrchestrator:
         try:
             recipe = self.search_agent.search(
                 state["ingredients"],
-                state["difficulty"]
+                state["difficulty"],
+                state.get("lang", "en")
             )
             if recipe:
                 logger.info("Web search hit - recipe found")
@@ -167,7 +171,8 @@ class RecipeGraphOrchestrator:
         try:
             result = self.recipe_agent.generate(
                 state["ingredients"],
-                state["difficulty"]
+                state["difficulty"],
+                state.get("lang", "en")
             )
             logger.info(f"Generated recipe: {result.get('name', 'Unknown')}")
             return {
@@ -206,6 +211,7 @@ class RecipeGraphOrchestrator:
                 state["recipe"],
                 state["ingredients"],
                 state["difficulty"],
+                state.get("lang", "en"),
                 source=state.get("source_node", "generate")
             )
         except Exception as e:
