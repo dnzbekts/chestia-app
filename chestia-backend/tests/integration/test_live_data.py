@@ -45,9 +45,9 @@ def test_copilotkit_live():
     print("   (Using direct /generate endpoint for live test)")
     
     test_payload = {
-        "ingredients": ["eggplant","minced beef","onion", "soccer"],
-        "difficulty": "intermediate",
-        "lang": "en"
+        "ingredients": ["kuzu eti","soğan","yeşil biber", "domates"],
+        "difficulty": "medium",
+        "lang": "tr"
     }
     
     print(f"   Ingredients: {test_payload['ingredients']}")

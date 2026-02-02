@@ -16,7 +16,7 @@ class ValidationAgent:
         """Initialize with structured LLM."""
         self.llm = LLMFactory.create_validation_llm() # Using search LLM for classification task
 
-    def validate(self, ingredients: List[str], difficulty: str) -> Dict[str, Any]:
+    def validate(self, ingredients: List[str], difficulty: str, lang: str = "en") -> Dict[str, Any]:
         """
         Validate ingredients and difficulty.
         
@@ -42,12 +42,12 @@ class ValidationAgent:
                 "valid_ingredients": [],
                 "invalid_ingredients": [],
                 "difficulty": normalized_diff,
-                "error": "At least 3 ingredients are required."
+                "error": i18n.get_message(i18n.MIN_INGREDIENTS, lang)
             }
 
         prompt = f"""
         Role: Culinary Data Auditor
-        Task: Filter a list of items to keep ONLY edible cooking ingredients.
+        Task: Filter a list of items to keep ONLY edible cooking ingredients in the specified language ({lang}).
         
         Items to classify: {', '.join(ingredients)}
         

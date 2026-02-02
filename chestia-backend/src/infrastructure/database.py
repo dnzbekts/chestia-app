@@ -127,6 +127,7 @@ def init_db(conn):
             name TEXT NOT NULL,
             ingredients JSON NOT NULL,
             difficulty TEXT NOT NULL,
+            lang TEXT NOT NULL DEFAULT 'en',
             steps JSON NOT NULL,
             metadata JSON
         )
@@ -153,6 +154,13 @@ def init_db(conn):
         )
     """)
     
+    # Migration: Add lang column if it doesn't exist
+    try:
+        cursor.execute("SELECT lang FROM recipes LIMIT 1")
+    except sqlite3.OperationalError:
+        logger.info("Migrating database: adding 'lang' column to 'recipes' table")
+        cursor.execute("ALTER TABLE recipes ADD COLUMN lang TEXT NOT NULL DEFAULT 'en'")
+    
     conn.commit()
     logger.info("Database schema initialized successfully")
 
@@ -160,7 +168,8 @@ def init_db(conn):
 def find_recipe_by_ingredients(
     conn, 
     ingredients: List[str], 
-    difficulty: str
+    difficulty: str,
+    lang: str = "en"
 ) -> Optional[Dict[str, Any]]:
     """
     Find a recipe matching non-default ingredients AND difficulty level.
@@ -187,11 +196,11 @@ def find_recipe_by_ingredients(
     non_default_ingredients = filter_default_ingredients(ingredients)
     ingredients_json = json.dumps(sorted(non_default_ingredients))
     
-    logger.info(f"Cache lookup: {ingredients_json}, difficulty={difficulty}")
+    logger.info(f"Cache lookup: {ingredients_json}, difficulty={difficulty}, lang={lang}")
     
     cursor.execute("""
-        SELECT * FROM recipes WHERE ingredients = ? AND difficulty = ?
-    """, (ingredients_json, difficulty))
+        SELECT * FROM recipes WHERE ingredients = ? AND difficulty = ? AND lang = ?
+    """, (ingredients_json, difficulty, lang))
     
     row = cursor.fetchone()
     if row:
@@ -230,6 +239,7 @@ def find_recipe_semantically(
     conn, 
     ingredients: List[str], 
     difficulty: str, 
+    lang: str = "en",
     threshold: Optional[float] = None
 ) -> Optional[Dict[str, Any]]:
     """
@@ -271,9 +281,9 @@ def find_recipe_semantically(
                 v.distance
             FROM vec_recipes v
             JOIN recipes r ON v.recipe_id = r.id
-            WHERE v.embedding MATCH ? AND r.difficulty = ? AND k = 1
+            WHERE v.embedding MATCH ? AND r.difficulty = ? AND r.lang = ? AND k = 1
             ORDER BY v.distance
-        """, (sqlite_vec.serialize_float32(query_vector), difficulty))
+        """, (sqlite_vec.serialize_float32(query_vector), difficulty, lang))
         
         row = cursor.fetchone()
         if row and row['distance'] < threshold:
@@ -296,6 +306,7 @@ def save_recipe(
     name: str, 
     ingredients: List[str], 
     difficulty: str, 
+    lang: str,
     steps: List[str], 
     metadata: Optional[Dict[str, Any]] = None
 ) -> int:
@@ -319,8 +330,8 @@ def save_recipe(
     Raises:
         DatabaseError: If save operation fails
     """
-    # Check for existing recipe with same ingredients and difficulty
-    existing = find_recipe_by_ingredients(conn, ingredients, difficulty)
+    # Check for existing recipe with same ingredients, difficulty and language
+    existing = find_recipe_by_ingredients(conn, ingredients, difficulty, lang)
     if existing:
         logger.info(
             f"Recipe already exists with ID {existing['id']}, "
@@ -333,12 +344,13 @@ def save_recipe(
     try:
         # 1. Save to relational table
         cursor.execute("""
-            INSERT INTO recipes (name, ingredients, difficulty, steps, metadata)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO recipes (name, ingredients, difficulty, lang, steps, metadata)
+            VALUES (?, ?, ?, ?, ?, ?)
         """, (
             name,
             json.dumps(sorted(ingredients)),
             difficulty,
+            lang,
             json.dumps(steps),
             json.dumps(metadata or {})
         ))

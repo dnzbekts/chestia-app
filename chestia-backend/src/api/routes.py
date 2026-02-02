@@ -69,14 +69,15 @@ def generate_recipe(payload: GenerateRequest, request: Request):
                     metadata = json.loads(metadata)
 
                 with get_db_connection() as conn:
-                    save_recipe(
-                        conn,
-                        name=recipe["name"],
-                        ingredients=result["ingredients"],  # Use validated ingredients from graph result
-                        difficulty=result.get("difficulty", payload.difficulty),
-                        steps=recipe["steps"],
-                        metadata=metadata
-                    )
+                        save_recipe(
+                            conn,
+                            name=recipe["name"],
+                            ingredients=result["ingredients"],
+                            difficulty=result.get("difficulty", payload.difficulty),
+                            lang=result.get("lang", payload.lang),
+                            steps=recipe["steps"],
+                            metadata=metadata
+                        )
             except Exception as e:
                 logger.warning(f"Failed to save recipe: {e}")
         
@@ -171,8 +172,9 @@ def modify_recipe(payload: ModifyRequest, request: Request):
                     save_recipe(
                         conn,
                         name=recipe["name"],
-                        ingredients=result["ingredients"],  # Use validated ingredients from graph result
+                        ingredients=result["ingredients"],
                         difficulty=result.get("difficulty", payload.difficulty),
+                        lang=payload.lang,
                         steps=recipe["steps"],
                         metadata=metadata
                     )
@@ -228,6 +230,7 @@ def handle_feedback(payload: FeedbackRequest, request: Request):
                 name=payload.recipe.dict()["name"],
                 ingredients=non_default_ingredients,
                 difficulty=payload.difficulty,
+                lang=payload.lang,
                 steps=payload.recipe.dict()["steps"],
                 metadata=payload.recipe.dict().get("metadata", {})
             )

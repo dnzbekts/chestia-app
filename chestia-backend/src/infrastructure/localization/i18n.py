@@ -16,6 +16,11 @@ SEMANTIC_SEARCH_MISS = "semantic_search_miss"
 WEB_SEARCH_HIT = "web_search_hit"
 WEB_SEARCH_MISS = "web_search_miss"
 
+# Difficulty keys
+DIFF_EASY = "easy"
+DIFF_INTERMEDIATE = "intermediate"
+DIFF_HARD = "hard"
+
 MESSAGES: Dict[str, Dict[str, str]] = {
     MIN_INGREDIENTS: {
         "en": "At least one non-default ingredient is required (ingredients like water, salt, and oil do not count)",
@@ -72,6 +77,18 @@ MESSAGES: Dict[str, Dict[str, str]] = {
     WEB_SEARCH_MISS: {
         "en": "No recipes found online, I will create one from scratch.",
         "tr": "Çevrimiçi tarif bulunamadı, sıfırdan bir tane oluşturacağım."
+    },
+    DIFF_EASY: {
+        "en": "easy",
+        "tr": "kolay"
+    },
+    DIFF_INTERMEDIATE: {
+        "en": "intermediate",
+        "tr": "orta seviye"
+    },
+    DIFF_HARD: {
+        "en": "hard",
+        "tr": "zor"
     }
 }
 

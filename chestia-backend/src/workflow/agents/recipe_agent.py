@@ -71,7 +71,7 @@ class RecipeAgent:
                 details={"raw_content": content[:200]}
             )
 
-    def generate(self, ingredients: List[str], difficulty: str) -> Dict[str, Any]:
+    def generate(self, ingredients: List[str], difficulty: str, lang: str = "en") -> Dict[str, Any]:
         """
         Generate a recipe from user-provided ingredients at specified difficulty.
         Default household ingredients are assumed available.
@@ -114,23 +114,26 @@ class RecipeAgent:
         - Default Ingredients (always available): {default_ingredients_list}
         
         Difficulty Level: {difficulty.upper()} - {difficulty_guidance.get(difficulty, '')}
+        Language: {lang.upper()}
         
         STRICT RULES (MUST FOLLOW):
         1. You MUST ONLY use ingredients from the lists above
         2. Do NOT add ANY ingredient that is not in User's Ingredients or Default Ingredients
         3. This is a hard constraint - violation means the recipe is invalid
+        4. ALL text fields (name, ingredients, steps) MUST be in {lang.upper()} language.
         
         Recipe Guidelines:
         1. Create a {difficulty} difficulty recipe using ONLY the available ingredients
-        2. Match complexity to {difficulty} level:
+        2. Ensure the recipient can understand the recipe in {lang.upper()}.
+        3. Match complexity to {difficulty} level:
            - Easy: Simple steps, basic techniques, 15-30 min
            - Intermediate: Multiple steps, some technique required, 30-60 min
            - Hard: Complex techniques, multiple stages, 60+ min
         
         Return JSON:
         {{
-            "name": "Recipe Name (Turkish or English)",
-            "ingredients": ["only ingredients from available lists"],
+            "name": "Recipe Name in {lang.upper()}",
+            "ingredients": ["list", "of", "ingredients", "in", "{lang.upper()}"],
             "steps": ["step1", "step2", ...],
             "metadata": {{"time": "20min", "difficulty": "{difficulty}"}}
         }}
