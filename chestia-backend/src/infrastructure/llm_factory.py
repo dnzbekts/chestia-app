@@ -122,3 +122,16 @@ class LLMFactory:
             model="gemini-2.0-flash",
             temperature=0.1
         )
+
+    @staticmethod
+    def create_validation_llm() -> ChatGoogleGenerativeAI:
+        """
+        Create LLM optimized for ingredient validation.
+        
+        Returns:
+            LLM instance with low temperature (0.1) for accurate ingredient validation
+        """
+        return LLMFactory.create_llm(
+            model="gemini-2.0-flash",
+            temperature=0.1
+        )

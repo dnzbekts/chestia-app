@@ -14,7 +14,7 @@ class ValidationAgent:
     
     def __init__(self):
         """Initialize with structured LLM."""
-        self.llm = LLMFactory.create_search_llm() # Using search LLM for classification task
+        self.llm = LLMFactory.create_validation_llm() # Using search LLM for classification task
 
     def validate(self, ingredients: List[str], difficulty: str) -> Dict[str, Any]:
         """
