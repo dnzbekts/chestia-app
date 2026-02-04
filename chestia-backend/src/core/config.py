@@ -5,9 +5,6 @@ Contains only configuration constants and dictionaries.
 Domain logic for ingredients is in domain/ingredients.py.
 """
 
-# CopilotKit Configuration
-COPILOTKIT_AGENT_NAME = "chestia_recipe_agent"
-COPILOTKIT_AGENT_DESCRIPTION = "Intelligent recipe generation from user-provided ingredients with auto-retry and validation"
 
 # LLM Configuration
 LLM_CONFIG = {

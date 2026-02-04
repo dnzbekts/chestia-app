@@ -22,31 +22,13 @@ def test_copilotkit_live():
     """
     base_url = "http://127.0.0.1:8000"
     
-    print("=" * 60)
-    print("🍳 CopilotKit Live Data Test")
-    print("=" * 60)
-    
-    # 1. Test info endpoint
-    print("\n📋 Testing /copilotkit info endpoint...")
-    try:
-        response = httpx.post(
-            f"{base_url}/copilotkit/",
-            json={"method": "info"},
-            timeout=10.0
-        )
-        print(f"   Status: {response.status_code}")
-        print(f"   Response: {json.dumps(response.json(), indent=2)}")
-    except Exception as e:
-        print(f"   ❌ Error: {e}")
-        return
-    
     # 2. Test direct graph invocation via internal endpoint
     print("\n🥘 Testing graph invocation with real data...")
     print("   (Using direct /generate endpoint for live test)")
     
     test_payload = {
-        "ingredients": ["kuzu eti","soğan","yeşil biber", "domates"],
-        "difficulty": "medium",
+        "ingredients": ["yumurta", "yeşil biber", "domates", "soğan"],
+        "difficulty": "hard",
         "lang": "tr"
     }
     
