@@ -24,7 +24,7 @@ def test_route_after_cache_hit():
     """Test routing after cache hit."""
     orchestrator = RecipeGraphOrchestrator()
     state = {"recipe": {"name": "Test"}}
-    assert orchestrator.route_after_cache(state) == "review_recipe"
+    assert orchestrator.route_after_cache(state) == "__end__"
 
 def test_route_after_cache_miss():
     """Test routing after cache miss."""

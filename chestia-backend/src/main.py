@@ -1,11 +1,10 @@
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from copilotkit.integrations.fastapi import add_fastapi_endpoint
-from copilotkit import CopilotKitRemoteEndpoint, LangGraphAGUIAgent
-import time
 
-from src.core import COPILOTKIT_AGENT_NAME, COPILOTKIT_AGENT_DESCRIPTION
-from src.workflow import copilotkit_graph
+import time
+import os
+
+
 from src.api.routes import router
 from src.api.rate_limit import setup_rate_limiting
 
@@ -21,10 +20,11 @@ app = FastAPI(
 setup_rate_limiting(app)
 
 # 1. CORS Configuration
-# In production, this should be restricted to specific origins
+ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000").split(",")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # TODO: Restrict in production
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["*"],
@@ -51,28 +51,13 @@ async def add_security_headers(request: Request, call_next):
 # Include API routes
 app.include_router(router)
 
-# Custom agent class to fix SDK v0.1.77 bug (missing dict_repr method)
-class ChestiaLangGraphAgent(LangGraphAGUIAgent):
-    """Extended LangGraphAGUIAgent with dict_repr for SDK compatibility."""
-    
-    def dict_repr(self):
-        """Return dictionary representation for SDK info endpoint."""
-        return {
-            "name": self.name,
-            "description": self.description,
-        }
 
 
-# Initialize CopilotKit Remote Endpoint with custom LangGraph agent
-copilotkit_sdk = CopilotKitRemoteEndpoint(
-    agents=[
-        ChestiaLangGraphAgent(
-            name=COPILOTKIT_AGENT_NAME,
-            description=COPILOTKIT_AGENT_DESCRIPTION,
-            graph=copilotkit_graph,
-        )
-    ],
-)
+@app.get("/health")
+async def health_check():
+    """Health check endpoint."""
+    return {"status": "ok", "timestamp": time.time()}
 
-# Add CopilotKit endpoint to FastAPI
-add_fastapi_endpoint(app, copilotkit_sdk, "/copilotkit")
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)

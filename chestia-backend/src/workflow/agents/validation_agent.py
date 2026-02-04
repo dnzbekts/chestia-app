@@ -6,6 +6,7 @@ from typing import List, Dict, Any
 import json
 import logging
 from src.infrastructure.llm_factory import LLMFactory
+from src.infrastructure.localization import i18n
 
 logger = logging.getLogger(__name__)
 

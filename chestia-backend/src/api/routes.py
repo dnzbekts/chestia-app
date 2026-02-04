@@ -1,9 +1,10 @@
-"""
-FastAPI route handlers for Chestia backend.
-"""
-
 from fastapi import APIRouter, HTTPException, Request
 import logging
+
+# CopilotKit Imports
+from copilotkit import LangGraphAGUIAgent
+from ag_ui_langgraph import add_langgraph_fastapi_endpoint
+from src.workflow.graph import create_workflow_graph
 
 from src.api.schemas import GenerateRequest, ModifyRequest, FeedbackRequest
 from src.api.rate_limit import limiter
@@ -11,10 +12,20 @@ from src.workflow import create_graph
 from src.infrastructure import get_db_connection, log_error, save_recipe
 from src.domain import filter_default_ingredients
 from src.infrastructure.localization import i18n
+from src.workflow.graph import create_graph
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+# CopilotKit Configuration
+agent = LangGraphAGUIAgent(
+    name="chestia_backend_agent",
+    description="A culinary agent that generates recipes from ingredients.",
+    graph=create_workflow_graph(),
+)
+
+add_langgraph_fastapi_endpoint(router, agent, "/copilotkit")
 
 # Initialize the graph
 graph = create_graph()
@@ -37,8 +48,8 @@ def generate_recipe(payload: GenerateRequest, request: Request):
         # Step 1: Filter default ingredients BEFORE graph
         filtered_ingredients = filter_default_ingredients(payload.ingredients)
         
-        # Step 2: Validate at least 1 non-default ingredient
-        if len(filtered_ingredients) < 1:
+        # Step 2: Validate at least 2 non-default ingredient
+        if len(filtered_ingredients) < 2:
             raise HTTPException(
                 status_code=422, 
                 detail=i18n.get_message(i18n.MIN_INGREDIENTS, payload.lang)
@@ -138,7 +149,7 @@ def modify_recipe(payload: ModifyRequest, request: Request):
         # Filter defaults
         filtered_ingredients = filter_default_ingredients(all_ingredients)
         
-        if len(filtered_ingredients) < 1:
+        if len(filtered_ingredients) < 2:
             raise HTTPException(
                 status_code=422,
                 detail=i18n.get_message(i18n.MIN_INGREDIENTS, payload.lang)
