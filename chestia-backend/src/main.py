@@ -1,3 +1,4 @@
+from ag_ui_langgraph import add_langgraph_fastapi_endpoint
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from copilotkit.integrations.fastapi import add_fastapi_endpoint
@@ -75,4 +76,6 @@ copilotkit_sdk = CopilotKitRemoteEndpoint(
 )
 
 # Add CopilotKit endpoint to FastAPI
-add_fastapi_endpoint(app, copilotkit_sdk, "/copilotkit")
+#add_fastapi_endpoint(app, copilotkit_sdk, "/copilotkit")
+
+add_langgraph_fastapi_endpoint(app=app,agent=LangGraphAGUIAgent(name=COPILOTKIT_AGENT_NAME,description=COPILOTKIT_AGENT_DESCRIPTION,graph=copilotkit_graph),path="/copilotkit")

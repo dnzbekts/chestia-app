@@ -34,9 +34,13 @@ def test_modify_endpoint_success(api_client, sample_recipe_data):
     with patch("src.api.routes.graph.invoke") as mock_invoke:
         mock_invoke.return_value = {
             "recipe": sample_recipe_data,
+            "ingredients": ["chicken", "tomato", "onion", "garlic", "basil", "oregano"],
+            "difficulty": "intermediate",
+            "lang": "en",
             "error": None,
             "extra_ingredients": [],
-            "iteration_count": 1
+            "iteration_count": 1,
+            "source_node": "generate"
         }
         
         response = api_client.post("/modify", json=payload)
@@ -53,8 +57,9 @@ def test_feedback_endpoint_approved(api_client, sample_recipe_data):
         "recipe": sample_recipe_data
     }
     
-    # Mock database to avoid real file I/O
-    with patch("src.api.routes.get_db_connection") as mock_db:
+    # Mock service layer to avoid real database I/O
+    with patch("src.api.routes.get_recipe_service") as mock_service:
+        mock_service.return_value.save_approved_recipe.return_value = 123
         response = api_client.post("/feedback", json=payload)
         assert response.status_code == 200
         assert response.json()["status"] == "success"
@@ -68,7 +73,6 @@ def test_feedback_endpoint_rejected(api_client, sample_recipe_data):
         "recipe": sample_recipe_data
     }
     
-    with patch("src.api.routes.get_db_connection") as mock_db:
-        response = api_client.post("/feedback", json=payload)
-        assert response.status_code == 200
-        assert response.json()["status"] == "rejected"
+    response = api_client.post("/feedback", json=payload)
+    assert response.status_code == 200
+    assert response.json()["status"] == "rejected"

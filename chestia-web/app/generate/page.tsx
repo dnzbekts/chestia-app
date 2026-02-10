@@ -1,16 +1,42 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import Image from 'next/image'
 import { CopilotChat } from "@copilotkit/react-ui"
-import { ChefHat } from 'lucide-react'
+import { useCoAgent } from "@copilotkit/react-core"
 import LanguageToggle from '@/components/language-toggle'
 import Footer from '@/components/footer'
 import { translations } from '@/lib/translations'
 
+// Define the Agent State matches the backend GraphState
+interface AgentState {
+    ingredients: string[];
+    original_ingredients: string[];
+    difficulty: string;
+    lang: string;
+    error: string;
+}
+
 export default function GeneratePage() {
     const [language, setLanguage] = useState<'en' | 'tr'>('en')
     const t = translations[language]
+
+    // Sync language state with the backend agent
+    const { state, setState } = useCoAgent<AgentState>({
+        name: "chestia_recipe_agent",
+        initialState: {
+            ingredients: [],
+            difficulty: "",
+            lang: "en",
+        }
+    });
+
+    // Update agent state when language changes
+    useEffect(() => {
+        if (state && state.lang !== language) {
+            setState({ ...state, lang: language })
+        }
+    }, [language, setState, state])
 
     return (
         <div className="relative min-h-screen w-full overflow-hidden bg-background text-foreground flex flex-col">
@@ -62,7 +88,18 @@ export default function GeneratePage() {
                     <div className="bg-black/40 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl overflow-hidden h-[600px] flex flex-col ring-1 ring-white/5">
                         <CopilotChat
                             className="flex-1 w-full h-full [&_.copilotKitChat]:bg-transparent [&_.copilotKitInput]:bg-white/5 [&_.copilotKitInput]:border-white/10"
-                            instructions="You are Chef Chestia, a culinary expert. Help the user generate recipes based on their ingredients."
+                            instructions={`You are Chef Chestia, a warm and knowledgeable culinary expert helping users create delicious recipes.
+
+CONVERSATION FLOW:
+1. Warmly greet and ask for ingredients (minimum 3 required)
+2. Once ingredients given, ask for difficulty level (easy, intermediate, hard)
+3. Confirm choices, then generate the recipe
+
+RULES:
+- ALWAYS collect BOTH ingredients AND difficulty before proceeding
+- If fewer than 3 ingredients, politely request more
+- Be concise, friendly, and encouraging
+- Current language: ${language === 'en' ? 'English' : 'Turkish'}`}
                             labels={{
                                 title: "Chestia",
                                 initial: language === 'en' ? "Hi! What ingredients do you have today?" : "Merhaba! Bugün hangi malzemeleriniz var?",

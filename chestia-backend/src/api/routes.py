@@ -8,7 +8,7 @@ import logging
 from src.api.schemas import GenerateRequest, ModifyRequest, FeedbackRequest
 from src.api.rate_limit import limiter
 from src.workflow import create_graph
-from src.infrastructure import get_db_connection, log_error, save_recipe
+from src.services import get_recipe_service
 from src.domain import filter_default_ingredients
 from src.infrastructure.localization import i18n
 
@@ -60,32 +60,21 @@ def generate_recipe(payload: GenerateRequest, request: Request):
 
         # Save only newly generated or web-searched recipes (not cache/semantic hits)
         source_node = result.get("source_node", "unknown")
-        if result and result.get("recipe") and source_node in ("generate", "web_search"):
-            try:
-                recipe = result["recipe"]
-                metadata = recipe.get("metadata", {})
-                if isinstance(metadata, str):
-                    import json
-                    metadata = json.loads(metadata)
-
-                with get_db_connection() as conn:
-                        save_recipe(
-                            conn,
-                            name=recipe["name"],
-                            ingredients=result["ingredients"],
-                            difficulty=result.get("difficulty", payload.difficulty),
-                            lang=result.get("lang", payload.lang),
-                            steps=recipe["steps"],
-                            metadata=metadata
-                        )
-            except Exception as e:
-                logger.warning(f"Failed to save recipe: {e}")
+        if result and result.get("recipe"):
+            recipe_service = get_recipe_service()
+            recipe_service.save_generated_recipe(
+                recipe=result["recipe"],
+                ingredients=result["ingredients"],
+                difficulty=result.get("difficulty", payload.difficulty),
+                lang=result.get("lang", payload.lang),
+                source_node=source_node
+            )
         
         # Step 4: Handle result
         if result.get("error"):
             # Log error to DB
-            with get_db_connection() as conn:
-                log_error(conn, "GenerationError", result["error"])
+            recipe_service = get_recipe_service()
+            recipe_service.log_error("GenerationError", result["error"])
             
             logger.warning(f"Recipe generation error: {result['error']}")
             
@@ -110,8 +99,8 @@ def generate_recipe(payload: GenerateRequest, request: Request):
         raise
     except Exception as e:
         logger.error(f"Unexpected error in generate_recipe: {e}", exc_info=True)
-        with get_db_connection() as conn:
-            log_error(conn, "UnexpectedError", str(e))
+        recipe_service = get_recipe_service()
+        recipe_service.log_error("UnexpectedError", str(e))
         raise HTTPException(
             status_code=500, 
             detail="An internal error occurred while processing the recipe."
@@ -160,30 +149,19 @@ def modify_recipe(payload: ModifyRequest, request: Request):
         
         # Save only newly generated or web-searched recipes (not cache/semantic hits)
         source_node = result.get("source_node", "unknown")
-        if result and result.get("recipe") and source_node in ("generate", "web_search"):
-            try:
-                recipe = result["recipe"]
-                metadata = recipe.get("metadata", {})
-                if isinstance(metadata, str):
-                    import json
-                    metadata = json.loads(metadata)
-                
-                with get_db_connection() as conn:
-                    save_recipe(
-                        conn,
-                        name=recipe["name"],
-                        ingredients=result["ingredients"],
-                        difficulty=result.get("difficulty", payload.difficulty),
-                        lang=payload.lang,
-                        steps=recipe["steps"],
-                        metadata=metadata
-                    )
-            except Exception as e:
-                logger.warning(f"Failed to save recipe: {e}")
+        if result and result.get("recipe"):
+            recipe_service = get_recipe_service()
+            recipe_service.save_generated_recipe(
+                recipe=result["recipe"],
+                ingredients=result["ingredients"],
+                difficulty=result.get("difficulty", payload.difficulty),
+                lang=payload.lang,
+                source_node=source_node
+            )
         
         if result.get("error"):
-            with get_db_connection() as conn:
-                log_error(conn, "ModificationError", result["error"])
+            recipe_service = get_recipe_service()
+            recipe_service.log_error("ModificationError", result["error"])
             
             return {
                 "status": "error",
@@ -201,8 +179,8 @@ def modify_recipe(payload: ModifyRequest, request: Request):
         raise
     except Exception as e:
         logger.error(f"Unexpected error in modify_recipe: {e}", exc_info=True)
-        with get_db_connection() as conn:
-            log_error(conn, "UnexpectedError", str(e))
+        recipe_service = get_recipe_service()
+        recipe_service.log_error("UnexpectedError", str(e))
         raise HTTPException(
             status_code=500, 
             detail="An internal error occurred while processing the recipe."
@@ -220,20 +198,13 @@ def handle_feedback(payload: FeedbackRequest, request: Request):
         }
     
     try:
-        with get_db_connection() as conn:
-            
-            # Filter default ingredients before caching
-            non_default_ingredients = filter_default_ingredients(payload.ingredients)
-            
-            save_recipe(
-                conn,
-                name=payload.recipe.dict()["name"],
-                ingredients=non_default_ingredients,
-                difficulty=payload.difficulty,
-                lang=payload.lang,
-                steps=payload.recipe.dict()["steps"],
-                metadata=payload.recipe.dict().get("metadata", {})
-            )
+        recipe_service = get_recipe_service()
+        recipe_service.save_approved_recipe(
+            recipe_dict=payload.recipe.dict(),
+            ingredients=payload.ingredients,
+            difficulty=payload.difficulty,
+            lang=payload.lang
+        )
         
         return {
             "status": "success", 
@@ -242,8 +213,8 @@ def handle_feedback(payload: FeedbackRequest, request: Request):
         }
     except Exception as e:
         logger.error(f"Unexpected error in handle_feedback: {e}", exc_info=True)
-        with get_db_connection() as conn:
-            log_error(conn, "FeedbackError", str(e))
+        recipe_service = get_recipe_service()
+        recipe_service.log_error("FeedbackError", str(e))
         raise HTTPException(
             status_code=500, 
             detail=i18n.get_message(i18n.FEEDBACK_SAVE_FAILED, payload.lang)

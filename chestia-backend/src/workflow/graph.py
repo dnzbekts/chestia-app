@@ -8,7 +8,9 @@ checkpointer support, proper error handling, and configuration management.
 from typing import TypedDict, List, Dict, Any, Optional, Annotated
 import logging
 from langgraph.graph import StateGraph, START, END
+from langgraph.graph import StateGraph, START, END, add_messages
 from langgraph.checkpoint.memory import MemorySaver
+from langchain_core.messages import AnyMessage
 from src.workflow.agents.recipe_agent import RecipeAgent
 from src.workflow.agents.review_agent import ReviewAgent
 from src.workflow.agents.search_agent import SearchAgent
@@ -17,6 +19,7 @@ from src.infrastructure.database import get_db_connection, find_recipe_by_ingred
 from src.infrastructure.localization import i18n
 from src.core.config import GRAPH_CONFIG
 from src.core.exceptions import RecipeGenerationError
+from src.services import get_recipe_service, RecipeService
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +42,7 @@ class GraphState(TypedDict):
     error: Optional[str]                # Error message if any
     iteration_count: int                # Current iteration
     source_node: Optional[str]          # Which node returned the recipe (cache, semantic, web_search, generate)
+    messages: Annotated[List[AnyMessage], add_messages]  # Chat history
 
 
 class RecipeGraphOrchestrator:
@@ -49,7 +53,8 @@ class RecipeGraphOrchestrator:
         recipe_agent: Optional[RecipeAgent] = None,
         review_agent: Optional[ReviewAgent] = None,
         search_agent: Optional[SearchAgent] = None,
-        validation_agent: Optional[ValidationAgent] = None
+        validation_agent: Optional[ValidationAgent] = None,
+        recipe_service: Optional[RecipeService] = None
     ):
         """
         Initialize the orchestrator.
@@ -59,15 +64,43 @@ class RecipeGraphOrchestrator:
             review_agent: Optional ReviewAgent instance (creates new if None)
             search_agent: Optional SearchAgent instance (creates new if None)
             validation_agent: Optional ValidationAgent instance (creates new if None)
+            recipe_service: Optional RecipeService instance (creates new if None)
         """
         self.recipe_agent = recipe_agent or RecipeAgent()
         self.review_agent = review_agent or ReviewAgent()
         self.search_agent = search_agent or SearchAgent()
         self.validation_agent = validation_agent or ValidationAgent()
+        self.recipe_service = recipe_service or get_recipe_service()
         
         # Load configuration
         self.max_iterations = GRAPH_CONFIG["max_iterations"]
         self.max_extras = GRAPH_CONFIG["max_extra_ingredients"]
+
+    def parse_input_node(self, state: GraphState) -> Dict[str, Any]:
+        """
+        Parse user input to extract ingredients and difficulty.
+        Only runs if ingredients are missing.
+        """
+        # If ingredients are already provided (e.g. from structured input), skip parsing
+        if state.get("ingredients") and len(state["ingredients"]) > 0:
+            logger.info("Ingredients already provided, skipping parsing")
+            return {}
+            
+        logger.info("Parsing user input from messages...")
+        parsed = self.recipe_agent.parse_request(state.get("messages", []))
+        
+        updates = {}
+        if parsed.get("ingredients"):
+            updates["ingredients"] = parsed["ingredients"]
+            logger.info(f"Extracted ingredients: {parsed['ingredients']}")
+            
+        if parsed.get("difficulty"):
+            updates["difficulty"] = parsed["difficulty"]
+            
+        if parsed.get("lang"):
+            updates["lang"] = parsed["lang"]
+            
+        return updates
 
     def validate_ingredients_node(self, state: GraphState) -> Dict[str, Any]:
         """Validate and sanitize ingredients list and difficulty."""
@@ -276,30 +309,75 @@ class RecipeGraphOrchestrator:
             "recipe": None
         }
 
+    def save_recipe_node(self, state: GraphState) -> Dict[str, Any]:
+        """
+        Save successful recipe to database.
+        
+        Only saves if:
+        - No error present
+        - Recipe exists
+        - Source is web_search or generate (cache/semantic already saved)
+        """
+        if state.get("error") or not state.get("recipe"):
+            logger.debug("Skipping save - error or no recipe")
+            return {}
+        
+        source = state.get("source_node")
+        
+        # Skip saving for cache and semantic hits (already in DB)
+        if source in ["cache", "semantic_search"]:
+            logger.info(f"Skipping save - recipe from {source} already in database")
+            return {}
+        
+        try:
+            recipe = state["recipe"]
+            ingredients = state["ingredients"]
+            difficulty = state["difficulty"]
+            lang = state.get("lang", "en")
+            
+            recipe_id = self.recipe_service.save_generated_recipe(
+                recipe=recipe,
+                ingredients=ingredients,
+                difficulty=difficulty,
+                lang=lang,
+                source_node=source
+            )
+            
+            if recipe_id:
+                logger.info(f"Saved recipe to database with ID: {recipe_id}")
+            else:
+                logger.debug("Recipe not saved (likely cache/semantic hit)")
+            
+            return {}
+        except Exception as e:
+            # Log error but don't fail the workflow
+            logger.error(f"Failed to save recipe: {e}", exc_info=True)
+            return {}
+
     def route_after_review(self, state: GraphState) -> str:
         """Route based on review outcome."""
         if state.get("error"):
-            return END
+            return "save_recipe"  # Still go to save (will skip internally)
         
         if not state.get("recipe"):
             if state.get("iteration_count", 0) >= self.max_iterations:
-                return END
+                return "save_recipe"
             return "generate"
         
-        return END
+        return "save_recipe"  # Changed from END
 
     def route_after_cache(self, state: GraphState) -> str:
         """Route after cache check. Cached recipes are pre-validated, skip review."""
         if state.get("recipe"):
             logger.info("Cache hit - skipping review (pre-validated)")
-            return END  # Cached recipes are already validated
+            return "save_recipe"  # Changed from END
         return "semantic_search"
 
     def route_after_semantic(self, state: GraphState) -> str:
         """Route after semantic search. Semantic matches are pre-validated, skip review."""
         if state.get("recipe"):
             logger.info("Semantic hit - skipping review (pre-validated)")
-            return END  # Semantic matches are already validated
+            return "save_recipe"  # Changed from END
         return "web_search"
 
     def route_after_search(self, state: GraphState) -> str:
@@ -327,15 +405,19 @@ class RecipeGraphOrchestrator:
         workflow = StateGraph(GraphState)
         
         # Add nodes
+        workflow.add_node("parse_input", self.parse_input_node)
         workflow.add_node("validate_ingredients", self.validate_ingredients_node)
         workflow.add_node("search_cache", self.search_cache_node)
         workflow.add_node("semantic_search", self.semantic_search_node)
         workflow.add_node("web_search", self.web_search_node)
         workflow.add_node("generate_recipe", self.generate_recipe_node)
         workflow.add_node("review_recipe", self.review_recipe_node)
+        workflow.add_node("save_recipe", self.save_recipe_node)  # NEW
         
         # Add edges
-        workflow.add_edge(START, "validate_ingredients")
+        # Add edges
+        workflow.add_edge(START, "parse_input")
+        workflow.add_edge("parse_input", "validate_ingredients")
         
         workflow.add_conditional_edges(
             "validate_ingredients",
@@ -350,7 +432,7 @@ class RecipeGraphOrchestrator:
             "search_cache",
             self.route_after_cache,
             {
-                END: END,  # Cache hits skip review
+                "save_recipe": "save_recipe",  # Changed from END
                 "semantic_search": "semantic_search"
             }
         )
@@ -359,7 +441,7 @@ class RecipeGraphOrchestrator:
             "semantic_search",
             self.route_after_semantic,
             {
-                END: END,  # Semantic hits skip review
+                "save_recipe": "save_recipe",  # Changed from END
                 "web_search": "web_search"
             }
         )
@@ -380,9 +462,12 @@ class RecipeGraphOrchestrator:
             self.route_after_review,
             {
                 "generate": "generate_recipe",
-                END: END
+                "save_recipe": "save_recipe"  # Changed from END
             }
         )
+        
+        # Add edge from save_recipe to END
+        workflow.add_edge("save_recipe", END)
         
         # Compile with optional checkpointer
         if with_checkpointer:

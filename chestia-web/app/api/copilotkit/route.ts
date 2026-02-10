@@ -1,17 +1,20 @@
 import {
     CopilotRuntime,
-    ExperimentalEmptyAdapter,
+    GoogleGenerativeAIAdapter,
     copilotRuntimeNextJSAppRouterEndpoint,
 } from "@copilotkit/runtime";
 import { LangGraphHttpAgent } from "@copilotkit/runtime/langgraph";
 import { NextRequest } from "next/server";
 
-const serviceAdapter = new ExperimentalEmptyAdapter();
+// Initialize Google Generative AI Adapter with Gemini 2.0 Flash model
+const serviceAdapter = new GoogleGenerativeAIAdapter({
+    model: "gemini-2.0-flash",
+});
 
 const runtime = new CopilotRuntime({
     agents: {
-        chestia_backend_agent: new LangGraphHttpAgent({
-            url: process.env.LANGGRAPH_DEPLOYMENT_URL || "http://127.0.0.1:8000/copilotkit",
+        chestia_recipe_agent: new LangGraphHttpAgent({
+            url: process.env.LANGGRAPH_DEPLOYMENT_URL || "http://localhost:8000/copilotkit",
         }) as any,
     },
 });
@@ -23,5 +26,6 @@ export const POST = async (req: NextRequest) => {
         endpoint: "/api/copilotkit",
     });
 
-    return handleRequest(req);
+    const response = await handleRequest(req);
+    return response;
 };

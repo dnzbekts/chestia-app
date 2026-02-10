@@ -41,7 +41,7 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark">
       <body className={`font-sans antialiased bg-background text-foreground`}>
-        <CopilotKit runtimeUrl="/api/copilotkit" agent="chestia_backend_agent">
+        <CopilotKit runtimeUrl="/api/copilotkit" agent="chestia_recipe_agent">
           {children}
         </CopilotKit>
         <Analytics />

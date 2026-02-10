@@ -34,7 +34,8 @@ def test_save_and_find_recipe(memory_db):
             memory_db, 
             name="Chicken Tomato", 
             ingredients=ingredients, 
-            difficulty="easy", 
+            difficulty="easy",
+            lang="en",
             steps=steps
         )
         
@@ -49,7 +50,7 @@ def test_find_recipe_difficulty_mismatch(memory_db):
     """Ensure difficulty is checked in lookup."""
     with patch("src.infrastructure.database.get_embedding_service") as mock_service:
         mock_service.return_value.generate_embedding.return_value = [0.1] * 3072
-        save_recipe(memory_db, "Easy One", ["water"], "easy", ["drink"])
+        save_recipe(memory_db, "Easy One", ["water"], "easy", "en", ["drink"])
         
         recipe = find_recipe_by_ingredients(memory_db, ["water"], "hard")
         assert recipe is None
