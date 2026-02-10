@@ -12,6 +12,11 @@ __pycache__/
 .pytest_cache/
 .ipynb_checkpoints/
 
+# Database Files (Explicit)
+chestia-backend/src/infrastructure/chestia.db
+chestia-backend/src/infrastructure/chestia.db-shm
+chestia-backend/src/infrastructure/chestia.db-wal
+
 # Node / Frontend
 node_modules/
 .next/

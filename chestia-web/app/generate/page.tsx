@@ -3,10 +3,11 @@
 import React, { useState, useEffect } from 'react'
 import Image from 'next/image'
 import { CopilotChat } from "@copilotkit/react-ui"
-import { useCoAgent } from "@copilotkit/react-core"
+import { useCoAgent, useCoAgentStateRender } from "@copilotkit/react-core"
 import LanguageToggle from '@/components/language-toggle'
 import Footer from '@/components/footer'
 import { translations } from '@/lib/translations'
+import RecipeCard from '@/components/recipe-card'
 
 // Define the Agent State matches the backend GraphState
 interface AgentState {
@@ -15,6 +16,14 @@ interface AgentState {
     difficulty: string;
     lang: string;
     error: string;
+    recipe?: {
+        name: string;
+        ingredients: string[];
+        steps: string[];
+        metadata?: {
+            [key: string]: any;
+        };
+    };
 }
 
 export default function GeneratePage() {
@@ -29,6 +38,21 @@ export default function GeneratePage() {
             difficulty: "",
             lang: "en",
         }
+    });
+
+    // Render the agent state (Recipe) inside the chat
+    useCoAgentStateRender<AgentState>({
+        name: "chestia_recipe_agent",
+        render: ({ state }) => {
+            if (state.recipe && !state.error) {
+                return (
+                    <div className="w-full mb-4">
+                        <RecipeCard recipe={state.recipe} />
+                    </div>
+                );
+            }
+            return null;
+        },
     });
 
     // Update agent state when language changes
@@ -74,8 +98,8 @@ export default function GeneratePage() {
 
 
             {/* Main Content Area */}
-            <main className="flex-grow relative z-10 flex items-center justify-center pt-24 pb-12 px-4">
-                <div className="w-full max-w-2xl">
+            <main className="flex-grow relative z-10 flex flex-col items-center pt-24 pb-12 px-4">
+                <div className="w-full max-w-2xl flex flex-col items-center">
                     {/* Header */}
                     <div className="text-center mb-8">
                         <div className="inline-flex items-center justify-center p-3 rounded-full">
@@ -85,7 +109,7 @@ export default function GeneratePage() {
                     </div>
 
                     {/* Chat Container */}
-                    <div className="bg-black/40 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl overflow-hidden h-[600px] flex flex-col ring-1 ring-white/5">
+                    <div className="w-full bg-black/40 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl overflow-hidden h-[600px] flex flex-col ring-1 ring-white/5 mb-8">
                         <CopilotChat
                             className="flex-1 w-full h-full [&_.copilotKitChat]:bg-transparent [&_.copilotKitInput]:bg-white/5 [&_.copilotKitInput]:border-white/10"
                             instructions={`You are Chef Chestia, a warm and knowledgeable culinary expert helping users create delicious recipes.
