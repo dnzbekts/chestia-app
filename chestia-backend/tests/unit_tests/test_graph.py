@@ -9,10 +9,10 @@ def test_add_extras_reducer():
     assert result == ["salt", "pepper", "garlic"]
 
 def test_route_after_review_end_on_error():
-    """Test routing to END if error present."""
+    """Test routing to save_recipe if error present."""
     orchestrator = RecipeGraphOrchestrator()
     state = {"error": "some error"}
-    assert orchestrator.route_after_review(state) == "__end__"
+    assert orchestrator.route_after_review(state) == "save_recipe"
 
 def test_route_after_review_retry():
     """Test routing back to generate if recipe is missing and iterations remain."""
@@ -21,10 +21,10 @@ def test_route_after_review_retry():
     assert orchestrator.route_after_review(state) == "generate"
 
 def test_route_after_cache_hit():
-    """Test routing after cache hit."""
+    """Test routing after cache hit - goes to save_recipe (will skip internally)."""
     orchestrator = RecipeGraphOrchestrator()
     state = {"recipe": {"name": "Test"}}
-    assert orchestrator.route_after_cache(state) == "__end__"
+    assert orchestrator.route_after_cache(state) == "save_recipe"
 
 def test_route_after_cache_miss():
     """Test routing after cache miss."""

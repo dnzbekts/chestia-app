@@ -6,8 +6,13 @@ Refactored to use LLMFactory for initialization and follow DRY/SOLID principles.
 
 from typing import List, Dict, Any
 import json
+import logging
 from src.infrastructure.llm_factory import LLMFactory
 from src.core.exceptions import RecipeGenerationError, IngredientValidationError
+
+
+
+logger = logging.getLogger(__name__)
 
 
 class RecipeAgent:
@@ -148,3 +153,54 @@ class RecipeAgent:
             raise RecipeGenerationError(
                 f"Unexpected error during recipe generation: {str(e)}"
             )
+    def parse_request(self, messages: List[Any]) -> Dict[str, Any]:
+        """
+        Parse user request from conversation history to extract ingredients and difficulty.
+        
+        Args:
+            messages: List of conversation messages
+            
+        Returns:
+            Dictionary with keys: ingredients, difficulty, lang (inferred)
+        """
+        if not messages:
+            return {}
+            
+        # Get the last user message
+        last_message = None
+        for msg in reversed(messages):
+            if hasattr(msg, "type") and msg.type == "human":
+                last_message = msg.content
+                break
+            # Handle dict messages (if raw)
+            elif isinstance(msg, dict) and msg.get("type") == "human":
+                last_message = msg.get("content")
+                break
+                
+        if not last_message:
+            return {}
+
+        prompt = f"""
+        Extract cooking parameters from the user's request.
+        
+        USER REQUEST: "{last_message}"
+        
+        Extact:
+        1. Ingredients (list of strings)
+        2. Difficulty (easy/intermediate/hard) - default to 'easy' if not specified
+        3. Language (en/tr) - detect from text
+        
+        Output JSON only:
+        {{
+            "ingredients": ["ing1", "ing2"],
+            "difficulty": "easy",
+            "lang": "en"
+        }}
+        """
+        
+        try:
+            response = self.llm.invoke(prompt)
+            return self._parse_json_response(response.content)
+        except Exception as e:
+            logger.error(f"Failed to parse user request: {e}")
+            return {}

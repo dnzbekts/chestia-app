@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { ChefHat, Zap, Sparkles, Search } from 'lucide-react'
+import Link from 'next/link'
 import Image from 'next/image'
 import Hero from '@/components/hero'
 import HowItWorks from '@/components/how-it-works'
@@ -170,9 +171,9 @@ export default function Home() {
           <p className="text-lg text-muted-foreground mb-8">
             {t.cta.subtitle}
           </p>
-          <button className="px-8 py-4 rounded-full bg-gradient-to-r from-[#ff6b5b] to-[#ff8c42] text-white font-semibold hover:shadow-lg hover:shadow-[#ff6b5b]/50 transition-all duration-300 transform hover:scale-105">
+          <Link href="/generate" className="inline-block px-8 py-4 rounded-full bg-gradient-to-r from-[#ff6b5b] to-[#ff8c42] text-white font-semibold hover:shadow-lg hover:shadow-[#ff6b5b]/50 transition-all duration-300 transform hover:scale-105">
             {t.cta.button}
-          </button>
+          </Link>
         </div>
       </section>
 

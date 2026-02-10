@@ -12,12 +12,15 @@ interface HeroProps {
   t: Translation
 }
 
+import { useRouter } from 'next/navigation'
+
 export default function Hero({ t }: HeroProps) {
   const [input, setInput] = useState('')
+  const router = useRouter()
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    // TODO: Implement recipe generation
+    router.push('/generate')
   }
 
   return (

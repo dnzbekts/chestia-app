@@ -1,10 +1,13 @@
+from ag_ui_langgraph import add_langgraph_fastapi_endpoint
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-
+from copilotkit.integrations.fastapi import add_fastapi_endpoint
+from copilotkit import CopilotKitRemoteEndpoint, LangGraphAGUIAgent
 import time
 import os
 
-
+from src.core import COPILOTKIT_AGENT_NAME, COPILOTKIT_AGENT_DESCRIPTION
+from src.workflow import copilotkit_graph
 from src.api.routes import router
 from src.api.rate_limit import setup_rate_limiting
 
@@ -51,12 +54,21 @@ async def add_security_headers(request: Request, call_next):
 # Include API routes
 app.include_router(router)
 
-
-
 @app.get("/health")
 async def health_check():
     """Health check endpoint."""
     return {"status": "ok", "timestamp": time.time()}
+
+# Add CopilotKit endpoint to FastAPI
+add_langgraph_fastapi_endpoint(
+    app=app,
+    agent=LangGraphAGUIAgent(
+        name=COPILOTKIT_AGENT_NAME,
+        description=COPILOTKIT_AGENT_DESCRIPTION,
+        graph=copilotkit_graph
+    ),
+    path="/copilotkit"
+)
 
 if __name__ == "__main__":
     import uvicorn

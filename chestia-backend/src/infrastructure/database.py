@@ -89,8 +89,17 @@ def get_db_connection(db_path: Optional[str] = None):
     
     conn = None
     try:
-        conn = sqlite3.connect(db_path)
+        # Add timeout to handle concurrent access
+        conn = sqlite3.connect(db_path, timeout=30.0)
         conn.row_factory = sqlite3.Row
+        
+        # Enable WAL mode for better concurrency (if not already enabled)
+        try:
+            conn.execute("PRAGMA journal_mode=WAL")
+        except sqlite3.OperationalError:
+            # WAL mode may already be enabled or database is temporarily locked
+            # This is not critical, continue with connection
+            pass
         
         # Load sqlite-vec extension
         conn.enable_load_extension(True)

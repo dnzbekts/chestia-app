@@ -98,6 +98,7 @@ The backend orchestrates three specialized AI agents using LangGraph:
 - **Database**: SQLite with `sqlite-vec` extension for vector search
 - **Testing**: pytest (65+ tests covering Unit, Integration, and Security)
 - **Utilities & Foundation** (Clean Architecture layout):
+  - `src/services/recipe_service.py`: Business logic layer (recipe operations)
   - `src/infrastructure/llm_factory.py`: Centralized LLM & parameter management
   - `src/infrastructure/database.py`: Context-manager based SQLite operations & `EmbeddingService`
   - `src/infrastructure/localization/i18n.py`: Bilingual message management (EN/TR)
@@ -128,6 +129,8 @@ The backend orchestrates three specialized AI agents using LangGraph:
 │   │   │   └── logging_config.py        # Structured logging
 │   │   ├── domain/                      # Business Logic
 │   │   │   └── ingredients.py           # Ingredient normalization & filtering
+│   │   ├── services/                    # Service Layer (NEW)
+│   │   │   └── recipe_service.py        # Recipe business logic orchestration
 │   │   ├── infrastructure/              # External Services
 │   │   │   ├── database.py              # SQLite operations & EmbeddingService
 │   │   │   ├── llm_factory.py           # Centralized LLM management
@@ -140,9 +143,9 @@ The backend orchestrates three specialized AI agents using LangGraph:
 │   │   │       ├── review_agent.py      # Validation & review
 │   │   │       └── search_agent.py      # Web search
 │   │   └── main.py                      # Application entry point
-│   ├── tests/                           # Comprehensive Test Suite (14 files)
+│   ├── tests/                           # Comprehensive Test Suite (15 files)
 │   │   ├── conftest.py                  # Shared fixtures & extension loading
-│   │   ├── unit_tests/                  # Layer-specific unit tests (9 files)
+│   │   ├── unit_tests/                  # Layer-specific unit tests (10 files)
 │   │   └── integration/                 # End-to-end & endpoint tests (4 files)
 │   └── requirements.txt
 ├── chestia-web/                         # Next.js Frontend
@@ -306,13 +309,14 @@ The backend orchestrates three specialized AI agents using LangGraph:
 
 ---
 
-## � Testing
+## 🧪 Testing
 
-The backend features a comprehensive test suite (65+ tests) following the Triple-A (Arrange-Act-Assert) pattern and TDD principles.
+The backend features a comprehensive test suite (80 tests) following the Triple-A (Arrange-Act-Assert) pattern and TDD principles.
 
 ### Test Categories
 
 - **Unit Tests** (`tests/unit_tests/`):
+  - `test_recipe_service.py`: Service layer business logic and singleton pattern.
   - `test_schemas.py`: Pydantic validation and character constraints.
   - `test_ingredients.py`: Ingredient normalization and default filtering.
   - `test_exceptions.py`: Custom error hierarchy verification.
@@ -400,4 +404,4 @@ This project is private and proprietary.
 *Chestia - Elevating your culinary journey with AI.*
 
 ---
-Last reviewed: 2026-01-30 (Validation Agent & Consistency Fix)
+Last reviewed: 2026-02-10 (Service Layer Refactoring)

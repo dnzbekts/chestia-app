@@ -34,7 +34,7 @@ def test_save_and_find_recipe(memory_db):
             memory_db, 
             name="Chicken Tomato", 
             ingredients=ingredients, 
-            difficulty="easy", 
+            difficulty="easy",
             lang="en",
             steps=steps
         )
