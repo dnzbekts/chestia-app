@@ -1,6 +1,6 @@
 import pytest
 import json
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch, MagicMock, AsyncMock
 
 def test_generate_endpoint_min_ingredients(api_client):
     """Test validation rejection for <3 ingredients."""
@@ -30,8 +30,8 @@ def test_modify_endpoint_success(api_client, sample_recipe_data):
         "difficulty": "intermediate"
     }
     
-    # Mock the graph.invoke directly since it's already instantiated in routes.py
-    with patch("src.api.routes.graph.invoke") as mock_invoke:
+    # Mock the graph.ainvoke directly since it's already instantiated in routes.py
+    with patch("src.api.routes.graph.ainvoke", new_callable=AsyncMock) as mock_invoke:
         mock_invoke.return_value = {
             "recipe": sample_recipe_data,
             "ingredients": ["chicken", "tomato", "onion", "garlic", "basil", "oregano"],

@@ -5,6 +5,7 @@ import logging
 from copilotkit import LangGraphAGUIAgent
 from ag_ui_langgraph import add_langgraph_fastapi_endpoint
 from src.workflow.graph import create_workflow_graph
+from src.core import COPILOTKIT_AGENT_NAME, COPILOTKIT_AGENT_DESCRIPTION
 
 from src.api.schemas import GenerateRequest, ModifyRequest, FeedbackRequest
 from src.api.rate_limit import limiter
@@ -12,7 +13,6 @@ from src.workflow import create_graph
 from src.services import get_recipe_service
 from src.domain import filter_default_ingredients
 from src.infrastructure.localization import i18n
-from src.workflow.graph import create_graph
 
 logger = logging.getLogger(__name__)
 
@@ -20,8 +20,8 @@ router = APIRouter()
 
 # CopilotKit Configuration
 agent = LangGraphAGUIAgent(
-    name="chestia_backend_agent",
-    description="A culinary agent that generates recipes from ingredients.",
+    name=COPILOTKIT_AGENT_NAME,
+    description=COPILOTKIT_AGENT_DESCRIPTION,
     graph=create_workflow_graph(),
 )
 
@@ -33,7 +33,7 @@ graph = create_graph()
 
 @router.post("/generate")
 @limiter.limit("5/minute")
-def generate_recipe(payload: GenerateRequest, request: Request):
+async def generate_recipe(payload: GenerateRequest, request: Request):
     """
     Generate a recipe from ingredients.
     
@@ -56,7 +56,7 @@ def generate_recipe(payload: GenerateRequest, request: Request):
             )
         
         # Step 3: Invoke graph with filtered ingredients
-        result = graph.invoke({
+        result = await graph.ainvoke({
             "ingredients": filtered_ingredients,
             "original_ingredients": payload.ingredients,  # Keep originals for reference
             "difficulty": payload.difficulty,
@@ -66,7 +66,8 @@ def generate_recipe(payload: GenerateRequest, request: Request):
             "extra_count": 0,
             "error": None,
             "iteration_count": 0,
-            "source_node": None
+            "source_node": None,
+            "messages": []
         })
 
         # Save only newly generated or web-searched recipes (not cache/semantic hits)
@@ -120,7 +121,7 @@ def generate_recipe(payload: GenerateRequest, request: Request):
 
 @router.post("/modify")
 @limiter.limit("5/minute")
-def modify_recipe(payload: ModifyRequest, request: Request):
+async def modify_recipe(payload: ModifyRequest, request: Request):
     """
     Modify or regenerate a recipe with updated ingredients.
         
@@ -145,7 +146,7 @@ def modify_recipe(payload: ModifyRequest, request: Request):
             )
         
         # Invoke graph - starts fresh with new ingredient list
-        result = graph.invoke({
+        result = await graph.ainvoke({
             "ingredients": filtered_ingredients,
             "original_ingredients": all_ingredients,
             "difficulty": payload.difficulty,
@@ -155,7 +156,8 @@ def modify_recipe(payload: ModifyRequest, request: Request):
             "extra_count": 0,
             "error": None,
             "iteration_count": 0,
-            "source_node": None
+            "source_node": None,
+            "messages": []
         })
         
         # Save only newly generated or web-searched recipes (not cache/semantic hits)
@@ -200,7 +202,7 @@ def modify_recipe(payload: ModifyRequest, request: Request):
 
 @router.post("/feedback")
 @limiter.limit("10/minute")
-def handle_feedback(payload: FeedbackRequest, request: Request):
+async def handle_feedback(payload: FeedbackRequest, request: Request):
     """Cache approved recipes for future use."""
     if not payload.approved:
         return {

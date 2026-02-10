@@ -10,6 +10,7 @@ import logging
 from langgraph.graph import StateGraph, START, END, add_messages
 from langgraph.checkpoint.memory import MemorySaver
 from langchain_core.messages import AnyMessage
+from langchain_core.runnables import RunnableConfig
 from src.workflow.agents.recipe_agent import RecipeAgent
 from src.workflow.agents.review_agent import ReviewAgent
 from src.workflow.agents.search_agent import SearchAgent
@@ -77,7 +78,7 @@ class RecipeGraphOrchestrator:
         self.max_iterations = GRAPH_CONFIG["max_iterations"]
         self.max_extras = GRAPH_CONFIG["max_extra_ingredients"]
 
-    async def parse_input_node(self, state: GraphState, config: dict) -> Dict[str, Any]:
+    async def parse_input_node(self, state: GraphState, config: RunnableConfig) -> Dict[str, Any]:
         """
         Parse user input to extract ingredients and difficulty.
         Only runs if ingredients are missing.
@@ -103,14 +104,14 @@ class RecipeGraphOrchestrator:
             
         return updates
 
-    async def validate_ingredients_node(self, state: GraphState, config: dict) -> Dict[str, Any]:
+    async def validate_ingredients_node(self, state: GraphState, config: RunnableConfig) -> Dict[str, Any]:
         """Validate and sanitize ingredients list and difficulty."""
         logger.info(f"Validating ingredients: {state['ingredients']}")
         
         # Emit state for UI feedback
         # await copilotkit_emit_state(config, state) 
         
-        result = await self.validation_agent.validate(
+        result = self.validation_agent.validate(
             state["ingredients"],
             state["difficulty"],
             state.get("lang", "en")
@@ -126,7 +127,7 @@ class RecipeGraphOrchestrator:
             "error": None
         }
 
-    async def search_cache_node(self, state: GraphState, config: dict) -> Dict[str, Any]:
+    async def search_cache_node(self, state: GraphState, config: RunnableConfig) -> Dict[str, Any]:
         """Check if a recipe for these ingredients + difficulty exists in SQLite."""
         # await copilotkit_emit_state(config, state)
         
@@ -152,7 +153,7 @@ class RecipeGraphOrchestrator:
             "messages": [i18n.get_message(i18n.SEARCHING_CACHE, state.get("lang", "en"))]
         }
 
-    async def semantic_search_node(self, state: GraphState, config: dict) -> Dict[str, Any]:
+    async def semantic_search_node(self, state: GraphState, config: RunnableConfig) -> Dict[str, Any]:
         """
         Check if a similar recipe exists using semantic embeddings.
         Fills the gap between exact cache and web search.
@@ -181,7 +182,7 @@ class RecipeGraphOrchestrator:
         logger.debug("Semantic search miss")
         return {"messages": [i18n.get_message(i18n.SEMANTIC_SEARCH_MISS, state.get("lang", "en"))]}
 
-    async def web_search_node(self, state: GraphState, config: dict) -> Dict[str, Any]:
+    async def web_search_node(self, state: GraphState, config: RunnableConfig) -> Dict[str, Any]:
         """
         Search for recipe on web if cache miss.
         
@@ -189,10 +190,10 @@ class RecipeGraphOrchestrator:
         If fails/empty, proceeds to generation with no recipe.
         """
         # Connect to UI for real-time feedback
-        await copilotkit_emit_state(config, state)
+        # await copilotkit_emit_state(config, state)
 
         try:
-            recipe = await self.search_agent.search(
+            recipe = self.search_agent.search(
                 state["ingredients"],
                 state["difficulty"],
                 state.get("lang", "en")
@@ -210,14 +211,14 @@ class RecipeGraphOrchestrator:
         logger.debug("Web search miss - will generate new recipe")
         return {"messages": [i18n.get_message(i18n.WEB_SEARCH_MISS, state.get("lang", "en"))]}
 
-    async def generate_recipe_node(self, state: GraphState, config: dict) -> Dict[str, Any]:
+    async def generate_recipe_node(self, state: GraphState, config: RunnableConfig) -> Dict[str, Any]:
         """Generate a recipe using LLM with STRICT ingredient constraints."""
         
         # Connect to UI for real-time feedback
-        await copilotkit_emit_state(config, state)
+        # await copilotkit_emit_state(config, state)
 
         try:
-            result = await self.recipe_agent.generate(
+            result = self.recipe_agent.generate(
                 state["ingredients"],
                 state["difficulty"],
                 state.get("lang", "en")
@@ -241,7 +242,7 @@ class RecipeGraphOrchestrator:
                 "messages": [i18n.get_message(i18n.GENERATION_ERROR, state.get("lang", "en"))]
             }
 
-    async def review_recipe_node(self, state: GraphState, config: dict) -> Dict[str, Any]:
+    async def review_recipe_node(self, state: GraphState, config: RunnableConfig) -> Dict[str, Any]:
         """
         Validate recipe and handle auto-retry with extra ingredients.
             
@@ -255,7 +256,7 @@ class RecipeGraphOrchestrator:
             return state
 
         try:
-            review = await self.review_agent.validate(
+            review = self.review_agent.validate(
                 state["recipe"],
                 state["ingredients"],
                 state["difficulty"],
@@ -324,7 +325,7 @@ class RecipeGraphOrchestrator:
             "recipe": None
         }
 
-    async def save_recipe_node(self, state: GraphState, config: dict) -> Dict[str, Any]:
+    async def save_recipe_node(self, state: GraphState, config: RunnableConfig) -> Dict[str, Any]:
         """
         Save successful recipe to database.
         
